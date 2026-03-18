@@ -32,8 +32,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/submissions').then(r => setSubmissions(r.data)),
-      user.role === 'admin' ? api.get('/templates').then(r => setTemplates(r.data)) : Promise.resolve()
+      api.get('/submissions/').then(r => setSubmissions(r.data)),
+      user.role === 'admin' ? api.get('/templates/').then(r => setTemplates(r.data)) : Promise.resolve()
     ]).finally(() => setLoading(false))
   }, [user])
 
