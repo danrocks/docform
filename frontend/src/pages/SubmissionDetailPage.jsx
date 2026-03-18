@@ -101,7 +101,7 @@ export default function SubmissionDetailPage() {
         {/* Left: field data */}
         <div className="col-span-2 space-y-5">
           <div className="card p-5">
-            <h2 className="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wide text-gray-500">Form data</h2>
+            <h2 className="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wide text-gray-500">Interview data</h2>
             <div className="space-y-3">
               {Object.entries(sub.data || {}).map(([k, v]) => (
                 <div key={k} className="flex gap-4 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
@@ -114,7 +114,7 @@ export default function SubmissionDetailPage() {
 
           {sub.context && (
             <div className="card p-5">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Context / notes</h2>
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Interview context / notes</h2>
               <p className="text-sm text-gray-700">{sub.context}</p>
             </div>
           )}

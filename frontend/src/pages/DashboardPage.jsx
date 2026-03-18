@@ -88,7 +88,7 @@ export default function DashboardPage() {
             <p className="text-sm">No submissions yet</p>
             {(user.role === 'admin' || user.role === 'staff') && (
               <Link to="/submissions/new" className="text-sm text-brand-600 hover:underline mt-1 inline-block">
-                Create your first submission →
+                Start your first interview →
               </Link>
             )}
           </div>

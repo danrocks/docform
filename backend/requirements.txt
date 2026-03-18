@@ -7,3 +7,4 @@ PyMuPDF==1.24.10
 bcrypt==4.2.0
 python-jose[cryptography]==3.3.0
 aiofiles==24.1.0
+openai>=1.0.0

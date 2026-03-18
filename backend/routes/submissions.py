@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from docxtpl import DocxTemplate
 from auth_utils import get_current_user, require_role
+from question_schema import validate_submission_data
 
 router = APIRouter()
 
@@ -70,10 +71,11 @@ def create_submission(
         raise HTTPException(status_code=404, detail="Template not found")
     template = json.loads(tpl_path.read_text())
 
-    # Validate required fields
-    for field in template.get("fields", []):
-        if field.get("required") and not body.data.get(field["key"]):
-            raise HTTPException(status_code=400, detail=f"Field '{field['label']}' is required")
+    # Validate submission data against question configs
+    try:
+        validated_data = validate_submission_data(template.get("fields", []), body.data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     submission_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
@@ -82,7 +84,7 @@ def create_submission(
         "id": submission_id,
         "template_id": body.template_id,
         "template_name": template["name"],
-        "data": body.data,
+        "data": validated_data,
         "context": body.context,
         "status": "pending",
         "submitted_by": current_user["id"],

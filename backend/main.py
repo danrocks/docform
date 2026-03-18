@@ -5,6 +5,10 @@ from contextlib import asynccontextmanager
 import os, json
 from pathlib import Path
 
+# Read optional AI configuration from environment
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+
 from routes import auth, templates, submissions
 
 DATA_DIRS = [
