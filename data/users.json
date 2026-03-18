@@ -1,0 +1,23 @@
+[
+  {
+    "id": "1",
+    "username": "admin",
+    "password": "$2b$12$Q88ZiQ.MgP3ta9JgOzEE6.EUyRybc.wUjGbtxup3F5kVc/GxVm6oS",
+    "role": "admin",
+    "name": "Admin User"
+  },
+  {
+    "id": "2",
+    "username": "staff",
+    "password": "$2b$12$xGpul3IGD2WeevV979pG/OUs7GgAyk6nIboiaf.ryuusdAt0luMzG",
+    "role": "staff",
+    "name": "Staff User"
+  },
+  {
+    "id": "3",
+    "username": "approver",
+    "password": "$2b$12$RjNwHO333X3j1oLZUeldbe15vBgccojEmvR2WFSDI3nT9vqgihDya",
+    "role": "approver",
+    "name": "Approver User"
+  }
+]

@@ -1,0 +1,9 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+python-docx==1.1.2
+docxtpl==0.17.0
+PyMuPDF==1.24.10
+bcrypt==4.2.0
+python-jose[cryptography]==3.3.0
+aiofiles==24.1.0
