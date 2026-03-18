@@ -1,0 +1,171 @@
+[
+  {
+    "key": "client_name",
+    "label": "Client Name",
+    "type": "string",
+    "required": true,
+    "placeholder": "Enter the client's full legal name",
+    "help_text": "Use the client's legal registered name as it appears on official documents",
+    "config": {
+      "min_length": 2,
+      "max_length": 200,
+      "multiline": false,
+      "pattern": null,
+      "pattern_description": null
+    }
+  },
+  {
+    "key": "client_address",
+    "label": "Client Address",
+    "type": "string",
+    "required": true,
+    "placeholder": "Enter the client's full address",
+    "help_text": "Include street, city, postcode, and country",
+    "config": {
+      "min_length": 10,
+      "max_length": 500,
+      "multiline": true,
+      "pattern": null,
+      "pattern_description": null
+    }
+  },
+  {
+    "key": "company_name",
+    "label": "Service Provider Name",
+    "type": "string",
+    "required": true,
+    "placeholder": "Enter the service provider's company name",
+    "help_text": "Legal registered company name",
+    "config": {
+      "min_length": 2,
+      "max_length": 200,
+      "multiline": false,
+      "pattern": null,
+      "pattern_description": null
+    }
+  },
+  {
+    "key": "service_description",
+    "label": "Description of Services",
+    "type": "string",
+    "required": true,
+    "placeholder": "Describe the services to be provided",
+    "help_text": "Be specific about deliverables, scope, and any exclusions",
+    "config": {
+      "min_length": 50,
+      "max_length": 2000,
+      "multiline": true,
+      "pattern": null,
+      "pattern_description": null
+    }
+  },
+  {
+    "key": "service_category",
+    "label": "Service Category",
+    "type": "multiplechoice",
+    "required": true,
+    "placeholder": "",
+    "help_text": "Select the primary category of services being provided",
+    "config": {
+      "options": ["Consulting", "Software Development", "Design", "Marketing", "Legal", "Accounting", "Other"],
+      "allow_multiple": false,
+      "min_selections": 0,
+      "max_selections": null,
+      "display_as": "dropdown"
+    }
+  },
+  {
+    "key": "contract_value",
+    "label": "Total Contract Value",
+    "type": "number",
+    "required": true,
+    "placeholder": "Enter the total contract value",
+    "help_text": "The total fee for all services described in this agreement",
+    "config": {
+      "min": 0,
+      "max": null,
+      "integer_only": false,
+      "decimal_places": 2,
+      "step": 0.01,
+      "unit": "\u00a3"
+    }
+  },
+  {
+    "key": "payment_terms",
+    "label": "Payment Terms",
+    "type": "multiplechoice",
+    "required": true,
+    "placeholder": "",
+    "help_text": "How should payment be structured?",
+    "config": {
+      "options": ["Net 30", "Net 60", "Net 90", "Upon completion", "50% upfront, 50% on completion"],
+      "allow_multiple": false,
+      "min_selections": 0,
+      "max_selections": null,
+      "display_as": "radio"
+    }
+  },
+  {
+    "key": "number_of_payments",
+    "label": "Number of Payments",
+    "type": "number",
+    "required": true,
+    "placeholder": "Enter the number of payment instalments",
+    "help_text": "How many separate payments will be made?",
+    "config": {
+      "min": 1,
+      "max": 24,
+      "integer_only": true,
+      "decimal_places": null,
+      "step": 1,
+      "unit": null
+    }
+  },
+  {
+    "key": "start_date",
+    "label": "Agreement Start Date",
+    "type": "date",
+    "required": true,
+    "placeholder": "",
+    "help_text": "When should the agreement take effect?",
+    "config": {
+      "format": "YYYY-MM-DD",
+      "min_date": null,
+      "max_date": null,
+      "allow_future": true,
+      "allow_past": false,
+      "include_time": false
+    }
+  },
+  {
+    "key": "end_date",
+    "label": "Agreement End Date",
+    "type": "date",
+    "required": true,
+    "placeholder": "",
+    "help_text": "When should the agreement expire?",
+    "config": {
+      "format": "YYYY-MM-DD",
+      "min_date": null,
+      "max_date": null,
+      "allow_future": true,
+      "allow_past": false,
+      "include_time": false
+    }
+  },
+  {
+    "key": "confidentiality_required",
+    "label": "Is Confidentiality Required?",
+    "type": "multiplechoice",
+    "required": true,
+    "placeholder": "",
+    "help_text": "Should the parties be bound by confidentiality obligations?",
+    "config": {
+      "options": ["Yes", "No"],
+      "allow_multiple": false,
+      "min_selections": 0,
+      "max_selections": null,
+      "display_as": "radio"
+    }
+  }
+]
