@@ -9,7 +9,7 @@ function PickTemplate({ templates, onSelect }) {
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-900 mb-1">Choose a template</h2>
-      <p className="text-sm text-gray-500 mb-5">Select the document you want to fill out</p>
+      <p className="text-sm text-gray-500 mb-5">Select the document you want to complete</p>
       <div className="space-y-2">
         {templates.map(tpl => (
           <button key={tpl.id} onClick={() => onSelect(tpl)}
@@ -20,7 +20,7 @@ function PickTemplate({ templates, onSelect }) {
             <div className="flex-1">
               <p className="font-medium text-gray-900">{tpl.name}</p>
               {tpl.description && <p className="text-sm text-gray-500">{tpl.description}</p>}
-              <p className="text-xs text-gray-400 mt-0.5">{tpl.fields?.length || 0} fields</p>
+              <p className="text-xs text-gray-400 mt-0.5">{tpl.fields?.length || 0} interview questions</p>
             </div>
             <ChevronRight size={16} className="text-gray-300 group-hover:text-brand-500 transition-colors"/>
           </button>
@@ -30,14 +30,66 @@ function PickTemplate({ templates, onSelect }) {
   )
 }
 
-// Step 2: fill form fields
+// Step 2: complete interview
 function FillForm({ template, data, context, onDataChange, onContextChange, onBack, onSubmit, submitting }) {
   const [errors, setErrors] = useState({})
 
   const validate = () => {
     const errs = {}
-    template.fields.filter(f => f.required).forEach(f => {
-      if (!data[f.key] || String(data[f.key]).trim() === '') errs[f.key] = 'This field is required'
+    template.fields.forEach(f => {
+      const val = data[f.key]
+      const config = f.config || {}
+
+      // Required check
+      if (f.required) {
+        if (f.type === 'multiplechoice' && config.allow_multiple) {
+          if (!val || !Array.isArray(val) || val.length === 0) {
+            errs[f.key] = 'This question is required'
+            return
+          }
+        } else if (!val || String(val).trim() === '') {
+          errs[f.key] = 'This question is required'
+          return
+        }
+      }
+
+      if (!val || (typeof val === 'string' && val.trim() === '')) return
+
+      // Type-specific validation
+      if (f.type === 'string') {
+        const s = String(val)
+        if (config.min_length && s.length < config.min_length)
+          errs[f.key] = `Must be at least ${config.min_length} characters`
+        else if (config.max_length && s.length > config.max_length)
+          errs[f.key] = `Must be at most ${config.max_length} characters`
+        else if (config.pattern) {
+          try {
+            if (!new RegExp(config.pattern).test(s))
+              errs[f.key] = config.pattern_description || `Must match pattern ${config.pattern}`
+          } catch { /* skip invalid regex */ }
+        }
+      } else if (f.type === 'number') {
+        const n = parseFloat(val)
+        if (isNaN(n)) errs[f.key] = 'Must be a valid number'
+        else if (config.integer_only && !Number.isInteger(n)) errs[f.key] = 'Must be a whole number'
+        else if (config.min != null && n < config.min) errs[f.key] = `Must be at least ${config.min}`
+        else if (config.max != null && n > config.max) errs[f.key] = `Must be at most ${config.max}`
+      } else if (f.type === 'date') {
+        const d = new Date(val)
+        if (isNaN(d.getTime())) errs[f.key] = 'Must be a valid date'
+        else {
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          if (config.allow_future === false && d > today) errs[f.key] = 'Date cannot be in the future'
+          if (config.allow_past === false && d < today) errs[f.key] = 'Date cannot be in the past'
+        }
+      } else if (f.type === 'multiplechoice' && config.allow_multiple) {
+        const vals = Array.isArray(val) ? val : [val]
+        if (config.min_selections && vals.length < config.min_selections)
+          errs[f.key] = `Select at least ${config.min_selections}`
+        if (config.max_selections != null && vals.length > config.max_selections)
+          errs[f.key] = `Select at most ${config.max_selections}`
+      }
     })
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -49,34 +101,138 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
   }
 
   const renderField = field => {
-    const commonProps = {
-      id: field.key,
-      value: data[field.key] || '',
-      onChange: e => onDataChange(field.key, e.target.value),
-      className: `input ${errors[field.key] ? 'border-red-400 focus:ring-red-400' : ''}`,
-      placeholder: field.placeholder || '',
-    }
-    switch (field.type) {
-      case 'textarea': return <textarea {...commonProps} rows={3} className={`${commonProps.className} resize-none`}/>
-      case 'date':     return <input {...commonProps} type="date"/>
-      case 'number':   return <input {...commonProps} type="number"/>
-      case 'checkbox': return (
-        <div className="flex items-center gap-2 mt-1">
-          <input type="checkbox" id={field.key}
-            checked={!!data[field.key]}
-            onChange={e => onDataChange(field.key, e.target.checked)}
-            className="rounded border-gray-300 text-brand-600"/>
-          <label htmlFor={field.key} className="text-sm text-gray-700">{field.label}</label>
+    const config = field.config || {}
+    const err = errors[field.key] ? 'border-red-400 focus:ring-red-400' : ''
+
+    if (field.type === 'string') {
+      if (config.multiline) {
+        return (
+          <div className="relative">
+            <textarea id={field.key} value={data[field.key] || ''}
+              onChange={e => onDataChange(field.key, e.target.value)}
+              className={`input resize-none ${err}`} rows={3}
+              placeholder={field.placeholder || ''}
+              maxLength={config.max_length || undefined} />
+            {config.max_length && (
+              <span className="text-xs text-gray-400 absolute bottom-2 right-3">
+                {(data[field.key] || '').length} / {config.max_length}
+              </span>
+            )}
+          </div>
+        )
+      }
+      return (
+        <div className="relative">
+          <input type="text" id={field.key} value={data[field.key] || ''}
+            onChange={e => onDataChange(field.key, e.target.value)}
+            className={`input ${err}`}
+            placeholder={field.placeholder || ''}
+            maxLength={config.max_length || undefined} />
+          {config.max_length && (
+            <span className="text-xs text-gray-400 absolute top-1/2 -translate-y-1/2 right-3">
+              {(data[field.key] || '').length} / {config.max_length}
+            </span>
+          )}
         </div>
       )
-      case 'select': return (
-        <select {...commonProps}>
-          <option value="">Select…</option>
-          {(field.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+    }
+
+    if (field.type === 'number') {
+      const step = config.step || (config.integer_only ? 1 : config.decimal_places ? Math.pow(10, -config.decimal_places) : 'any')
+      return (
+        <div className="flex items-center gap-2">
+          {config.unit && <span className="text-sm text-gray-500 font-medium">{config.unit}</span>}
+          <input type="number" id={field.key} value={data[field.key] ?? ''}
+            onChange={e => onDataChange(field.key, e.target.value)}
+            className={`input flex-1 ${err}`}
+            placeholder={field.placeholder || ''}
+            min={config.min ?? undefined}
+            max={config.max ?? undefined}
+            step={step} />
+        </div>
+      )
+    }
+
+    if (field.type === 'date') {
+      const inputType = config.include_time ? 'datetime-local' : 'date'
+      return (
+        <input type={inputType} id={field.key} value={data[field.key] || ''}
+          onChange={e => onDataChange(field.key, e.target.value)}
+          className={`input ${err}`}
+          min={config.min_date || undefined}
+          max={config.max_date || undefined} />
+      )
+    }
+
+    if (field.type === 'multiplechoice') {
+      const options = config.options || []
+
+      if (config.display_as === 'radio') {
+        return (
+          <div className="space-y-1.5 mt-1">
+            {options.map(opt => (
+              <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name={field.key}
+                  checked={data[field.key] === opt}
+                  onChange={() => onDataChange(field.key, opt)}
+                  className="text-brand-600" />
+                <span className="text-sm text-gray-700">{opt}</span>
+              </label>
+            ))}
+          </div>
+        )
+      }
+
+      if (config.display_as === 'checkboxes' || (config.allow_multiple && config.display_as !== 'dropdown')) {
+        const selected = Array.isArray(data[field.key]) ? data[field.key] : []
+        return (
+          <div className="space-y-1.5 mt-1">
+            {options.map(opt => (
+              <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox"
+                  checked={selected.includes(opt)}
+                  onChange={e => {
+                    const next = e.target.checked
+                      ? [...selected, opt]
+                      : selected.filter(s => s !== opt)
+                    onDataChange(field.key, next)
+                  }}
+                  className="rounded border-gray-300 text-brand-600" />
+                <span className="text-sm text-gray-700">{opt}</span>
+              </label>
+            ))}
+          </div>
+        )
+      }
+
+      // Default: dropdown
+      if (config.allow_multiple) {
+        const selected = Array.isArray(data[field.key]) ? data[field.key] : []
+        return (
+          <select multiple id={field.key} value={selected}
+            onChange={e => {
+              const opts = Array.from(e.target.selectedOptions, o => o.value)
+              onDataChange(field.key, opts)
+            }}
+            className={`input ${err}`}>
+            {options.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )
+      }
+      return (
+        <select id={field.key} value={data[field.key] || ''}
+          onChange={e => onDataChange(field.key, e.target.value)}
+          className={`input ${err}`}>
+          <option value="">Select...</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       )
-      default: return <input {...commonProps} type="text"/>
     }
+
+    // Fallback
+    return <input type="text" id={field.key} value={data[field.key] || ''}
+      onChange={e => onDataChange(field.key, e.target.value)}
+      className={`input ${err}`} placeholder={field.placeholder || ''} />
   }
 
   return (
@@ -85,16 +241,17 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
         <ChevronLeft size={15}/> Back
       </button>
       <h2 className="text-lg font-semibold text-gray-900 mb-1">{template.name}</h2>
-      <p className="text-sm text-gray-500 mb-5">Fill in all required fields below</p>
+      <p className="text-sm text-gray-500 mb-5">Complete the interview below</p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {template.fields.map(field => (
           <div key={field.key}>
-            {field.type !== 'checkbox' && (
-              <label htmlFor={field.key} className="label">
-                {field.label}
-                {field.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
+            <label htmlFor={field.key} className="label">
+              {field.label}
+              {field.required && <span className="text-red-500 ml-0.5">*</span>}
+            </label>
+            {field.help_text && (
+              <p className="text-xs text-gray-500 mt-0.5 mb-1">{field.help_text}</p>
             )}
             {renderField(field)}
             {errors[field.key] && <p className="text-xs text-red-500 mt-1">{errors[field.key]}</p>}
@@ -102,16 +259,16 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
         ))}
 
         <div className="pt-2 border-t border-gray-100">
-          <label className="label">Submission context / notes</label>
+          <label className="label">Interview context / notes</label>
           <textarea className="input resize-none" rows={2} value={context}
             onChange={e => onContextChange(e.target.value)}
-            placeholder="Optional: describe the purpose or context of this submission" />
+            placeholder="Optional: describe the purpose or context of this interview" />
         </div>
 
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onBack} className="btn-secondary flex-1 justify-center">Back</button>
           <button type="submit" disabled={submitting} className="btn-primary flex-1 justify-center">
-            {submitting ? 'Generating documents…' : 'Submit & generate documents'}
+            {submitting ? 'Generating documents...' : 'Complete interview & generate documents'}
           </button>
         </div>
       </form>
@@ -127,14 +284,14 @@ function Success({ submission, onNew }) {
       <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
         <CheckCircle size={28} className="text-green-600"/>
       </div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-1">Submission complete</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-1">Interview complete</h2>
       <p className="text-sm text-gray-500 mb-6">
         Your documents are ready. You can download them from the submission page.
       </p>
       <div className="flex gap-3 justify-center">
         <button onClick={onNew} className="btn-secondary">New submission</button>
         <button onClick={() => navigate(`/submissions/${submission.id}`)} className="btn-primary">
-          View submission →
+          View submission &rarr;
         </button>
       </div>
     </div>
@@ -174,7 +331,7 @@ export default function NewSubmissionPage() {
     }
   }
 
-  const steps = ['Select template', 'Fill in form', 'Download documents']
+  const steps = ['Choose template', 'Complete interview', 'Documents ready']
 
   return (
     <div>
@@ -192,7 +349,7 @@ export default function NewSubmissionPage() {
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                   active ? 'bg-brand-600 text-white' : done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
                 }`}>
-                  {done ? '✓' : n}
+                  {done ? '\u2713' : n}
                 </div>
                 {label}
               </div>

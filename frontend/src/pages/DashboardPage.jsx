@@ -32,8 +32,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/submissions').then(r => setSubmissions(r.data)),
-      user.role === 'admin' ? api.get('/templates').then(r => setTemplates(r.data)) : Promise.resolve()
+      api.get('/submissions/').then(r => setSubmissions(r.data)),
+      user.role === 'admin' ? api.get('/templates/').then(r => setTemplates(r.data)) : Promise.resolve()
     ]).finally(() => setLoading(false))
   }, [user])
 
@@ -88,7 +88,7 @@ export default function DashboardPage() {
             <p className="text-sm">No submissions yet</p>
             {(user.role === 'admin' || user.role === 'staff') && (
               <Link to="/submissions/new" className="text-sm text-brand-600 hover:underline mt-1 inline-block">
-                Create your first submission →
+                Start your first interview →
               </Link>
             )}
           </div>
