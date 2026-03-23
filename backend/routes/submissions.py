@@ -24,6 +24,7 @@ def read_submissions(filter_template: str = None, filter_user: str = None, role:
     out = []
     for f in SUBMISSIONS_DATA.glob("*.json"):
         try:
+            print(f"Debug: loading submission... {f.name}")
             s = json.loads(f.read_text())
             if filter_template and s.get("template_id") != filter_template:
                 continue

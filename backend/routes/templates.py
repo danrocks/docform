@@ -1,25 +1,31 @@
 import sys, os
+import logging
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 from pydantic import BaseModel
 from typing import Optional, List
-import json, uuid, re, zipfile
+import json, uuid, re, zipfile,base64
 from pathlib import Path
 from datetime import datetime
+from fastapi import HTTPException, APIRouter, Request
+from fastapi.responses import FileResponse
+from typing import Optional
 from auth_utils import get_current_user, require_role
 from question_schema import validate_questions, DEFAULT_CONFIGS
-
+from ..config import settings
 router = APIRouter()
 
 TEMPLATES_DATA = Path("data/templates")
 TEMPLATES_UPLOAD = Path("uploads/templates")
 
 OPENAI_SYSTEM_PROMPT = """You are a document template designer. Given a user's description of a document they need, produce:
-1. A professional document template with {{placeholder_name}} tags (snake_case) wherever instance-specific information is needed.
+1. A professional word document template with {{placeholder_name}} tags (snake_case) wherever instance-specific information is needed.
 2. An interview \u2014 a structured list of questions someone would answer to fill in all the placeholders.
 
-Return JSON with this exact structure:
+Return a JSON object with keys: template (JSON), docx_base64 (base64 of a .docx file), filename (suggested filename). You may include json_filename/docx_filename keys. Backend will save files and publish download paths."
+
+The template JSON must have this exact structure:
 {
   "document_content": "FULL DOCUMENT TEXT WITH {{placeholders}}...",
   "questions": [
@@ -94,7 +100,16 @@ def extract_placeholders_from_docx(path: Path) -> List[str]:
 
 @router.get("/ai-status")
 def ai_status(current_user: dict = Depends(get_current_user)):
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    print ("Debug: checking AI status")
+    #comsole_log = f"Calling OpenAI API with model {model} and prompt: {prompt[:100]}..."
+    #print(comsole_log)
+    
+    # logging.basicConfig(level=logging.INFO)   
+    # logger = logging.getLogger(__name__)  # at top of module
+    # logger.debug("Detailed debug info")
+    # logger.info("Calling OpenAI API")
+    api_key = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
+    sys.stdout.write(f"Key {api_key}\n")
     return {"available": bool(api_key)}
 
 
@@ -258,46 +273,84 @@ def _create_docx_from_content(document_content: str, output_path: Path):
     doc.save(str(output_path))
 
 
-def _call_openai(prompt: str, model: str) -> dict:
-    """Call OpenAI API and return parsed JSON response."""
+
+def _call_openai(prompt, model):
+    import json
+    import re
     import openai
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)  
     if not api_key:
         raise HTTPException(status_code=501, detail="AI generation not configured")
 
-    client = openai.OpenAI(api_key=api_key)
+    text = None
 
+    # Try new OpenAI client first
     try:
-        response = client.chat.completions.create(
-            model=model,
+        client = openai.OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+        model=model,
             messages=[
                 {"role": "system", "content": OPENAI_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            response_format={"type": "json_object"},
-            timeout=60,
+            temperature=0.2,
+            #temperature=1.5,
+            max_tokens=2000,
         )
-        content = response.choices[0].message.content
-        return json.loads(content)
-    except json.JSONDecodeError:
-        # Retry once
+        print(f"    Debug: raw AI response object {resp}")
+        # try several ways to extract the message content
         try:
-            response = client.chat.completions.create(
+            text = resp.choices[0].message.content
+        except Exception:
+            print(f"    Debug: OpenAI API call failed (new client): {e}")
+            try:
+                text = resp.choices[0].message["content"]
+            except Exception:
+                try:
+                    text = resp.choices[0].text
+                except Exception:
+                    text = str(resp)
+    except Exception as e:
+        print(f"    Debug: OpenAI API call failed (new client): {e}")
+    print("here")
+    # Fallback to older openai package if needed
+    if not text:
+        try:
+            import openai
+            openai.api_key = api_key
+            resp = openai.ChatCompletion.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": OPENAI_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                response_format={"type": "json_object"},
-                timeout=60,
+                temperature=0.2,
+                max_tokens=2000,
             )
-            content = response.choices[0].message.content
-            return json.loads(content)
+            try:
+                text = resp.choices[0].message.content
+            except Exception:
+                try:
+                    text = resp.choices[0].message["content"]
+                except Exception:
+                    try:
+                        text = resp.choices[0].text
+                    except Exception:
+                        text = str(resp)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"AI returned malformed response: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+            raise HTTPException(status_code=500, detail=f"AI API error: {e}")
+
+    print(f"    Debug: raw AI response {text[:500]}...")
+    # parse JSON from model output robustly
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if not m:
+            raise ValueError("AI response did not contain valid JSON")
+        parsed = json.loads(m.group(0))
+    return parsed
 
 
 @router.post("/generate")
@@ -305,7 +358,7 @@ def generate_template(
     body: GenerateRequest,
     current_user: dict = Depends(require_role("admin"))
 ):
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
     if not api_key:
         raise HTTPException(status_code=501, detail="AI generation not configured")
 
@@ -366,7 +419,7 @@ def regenerate_template(
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY )
     if not api_key:
         raise HTTPException(status_code=501, detail="AI generation not configured")
 
@@ -402,3 +455,88 @@ def regenerate_template(
 
     path.write_text(json.dumps(template, indent=2))
     return template
+
+
+async def generate_template(body, request: Request):
+    # ...existing code...
+    try:
+        ai_result = _call_openai(body.prompt, body.model if getattr(body, "model", None) else "gpt-4o")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI call failed: {e}")
+
+    print(f"Debug: AI result {ai_result}")
+    
+
+    # output directory (ensure inside project backend/generated)
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "generated"))
+    os.makedirs(base_dir, exist_ok=True)
+
+    # create base filename
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    base_name = f"{timestamp}_{uuid.uuid4().hex}"
+
+    # save JSON template
+    template_obj = ai_result.get("template") or ai_result.get("json_template") or ai_result
+    json_filename = ai_result.get("json_filename") or f"{base_name}.json"
+    # sanitize
+    json_filename = re.sub(r"[\\/]+", "_", json_filename)
+    if not json_filename.lower().endswith(".json"):
+        json_filename = f"{json_filename}.json"
+    json_path = os.path.join(base_dir, json_filename)
+    try:
+        with open(json_path, "w", encoding="utf-8") as jf:
+            if isinstance(template_obj, str):
+                try:
+                    parsed = json.loads(template_obj)
+                    json.dump(parsed, jf, ensure_ascii=False, indent=2)
+                except Exception:
+                    jf.write(template_obj)
+            else:
+                json.dump(template_obj, jf, ensure_ascii=False, indent=2)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed saving JSON template: {e}")
+
+    # save docx if present
+    docx_b64 = ai_result.get("docx_base64") or ai_result.get("docx")
+    docx_filename: Optional[str] = None
+    if docx_b64:
+        try:
+            docx_bytes = base64.b64decode(docx_b64)
+            suggested = ai_result.get("filename") or ai_result.get("docx_filename") or f"{base_name}.docx"
+            # sanitize suggested filename
+            suggested = re.sub(r"[\\/]+", "_", suggested)
+            suggested = re.sub(r"[^\w\-. ]+", "", suggested)
+            if not suggested.lower().endswith(".docx"):
+                suggested = f"{suggested}.docx"
+            docx_filename = suggested
+            docx_path = os.path.join(base_dir, docx_filename)
+            with open(docx_path, "wb") as df:
+                df.write(docx_bytes)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed decoding/saving docx: {e}")
+
+    # build download paths (these are the paths returned to the caller / "ai should return paths")
+    # assume this router is mounted at /templates in main app
+    ai_result["json_path"] = f"/templates/download/{json_filename}"
+    ai_result["docx_path"] = f"/templates/download/{docx_filename}" if docx_filename else None
+
+    # remove large base64 before returning
+    ai_result.pop("docx_base64", None)
+    ai_result.pop("docx", None)
+
+    # return the AI result (now contains json_path/docx_path) so client can download individually
+    return ai_result
+
+# New route to serve generated files safely
+@router.get("/download/{filename}")
+def download_generated_file(filename: str):
+    # allow only simple filenames to prevent path traversal
+    if not re.match(r"^[\w\-. ]+\.(json|docx)$", filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "generated"))
+    file_path = os.path.abspath(os.path.join(base_dir, filename))
+    if not file_path.startswith(base_dir + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, filename=filename, media_type="application/octet-stream")
