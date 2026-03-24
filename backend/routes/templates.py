@@ -13,65 +13,16 @@ from fastapi.responses import FileResponse
 from typing import Optional
 from auth_utils import get_current_user, require_role
 from question_schema import validate_questions, DEFAULT_CONFIGS
-from ..config import settings
+from config import settings
+from fastapi.encoders import jsonable_encoder
+from promptbuilder import _build_system_prompt
 router = APIRouter()
 
 TEMPLATES_DATA = Path("data/templates")
 TEMPLATES_UPLOAD = Path("uploads/templates")
 
-OPENAI_SYSTEM_PROMPT = """You are a document template designer. Given a user's description of a document they need, produce:
-1. A professional word document template with {{placeholder_name}} tags (snake_case) wherever instance-specific information is needed.
-2. An interview \u2014 a structured list of questions someone would answer to fill in all the placeholders.
-
-Return a JSON object with keys: template (JSON), docx_base64 (base64 of a .docx file), filename (suggested filename). You may include json_filename/docx_filename keys. Backend will save files and publish download paths."
-
-The template JSON must have this exact structure:
-{
-  "document_content": "FULL DOCUMENT TEXT WITH {{placeholders}}...",
-  "questions": [
-    {
-      "key": "placeholder_name",
-      "label": "Human readable question?",
-      "type": "string | number | date | multiplechoice",
-      "required": true,
-      "placeholder": "hint text",
-      "help_text": "Guidance for the person answering",
-      "config": { ... }
-    }
-  ]
-}
-
-TYPES AND THEIR CONFIG:
-
-type "string" \u2014 for names, addresses, descriptions, any text:
-  config: { "min_length": int, "max_length": int|null, "multiline": bool, "pattern": regex|null, "pattern_description": string|null }
-  Use multiline:true for long text like descriptions, scope of work, terms.
-  Use pattern for emails, phone numbers, postcodes etc.
-  Set sensible max_length (e.g. 100 for names, 500 for descriptions, 2000 for long text).
-
-type "number" \u2014 for amounts, quantities, percentages:
-  config: { "min": number|null, "max": number|null, "integer_only": bool, "decimal_places": int|null, "step": number|null, "unit": string|null }
-  Use integer_only:true for counts, quantities. Use decimal_places:2 for currency. Set unit for display (e.g. "\u00a3", "%", "days").
-
-type "date" \u2014 for dates and deadlines:
-  config: { "format": "YYYY-MM-DD", "min_date": string|null, "max_date": string|null, "allow_future": bool, "allow_past": bool, "include_time": bool }
-  Use allow_future:false for birth dates. Use allow_past:false for future deadlines.
-
-type "multiplechoice" \u2014 for selections from predefined options:
-  config: { "options": ["opt1","opt2",...], "allow_multiple": bool, "min_selections": int, "max_selections": int|null, "display_as": "dropdown"|"radio"|"checkboxes" }
-  Use display_as:"radio" for 2-5 options single-select. Use "dropdown" for 6+ options. Use "checkboxes" with allow_multiple:true for multi-select.
-
-RULES:
-- Every {{placeholder}} in the document MUST have a corresponding question
-- Every question MUST correspond to a {{placeholder}} in the document
-- Use snake_case for all placeholder keys
-- Choose the most appropriate type for each piece of data
-- Set sensible config values \u2014 don't leave everything as defaults
-- For currency amounts, always set decimal_places:2 and appropriate unit
-- For names, set max_length around 100-200
-- For yes/no questions, use multiplechoice with options ["Yes","No"] and display_as:"radio"
-"""
-
+  
+OPENAI_SYSTEM_PROMPT = "_build_system_prompt()"
 
 def read_templates() -> list:
     out = []

@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os, json
 from pathlib import Path
-from..config import settings
+from config import settings
 # Read optional AI configuration from environment
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
