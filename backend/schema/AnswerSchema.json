@@ -1,0 +1,29 @@
+{  
+  "$schema": "https://json-schema.org/draft/2019-09/schema",  
+  "title": "Answer Set",  
+  "type": "object",  
+  "required": ["id", "schemaVersion", "interviewId", "interviewVersion", "respondentId", "status", "values"],  
+  "properties": {  
+    "$schema":          { "type": "string" },  
+    "schemaVersion":    { "type": "integer", "minimum": 1 },  
+    "id":               { "type": "string" },  
+    "interviewId":      { "type": "string" },  
+    "interviewVersion": { "type": "integer" },  
+    "respondentId":     { "type": "string" },  
+    "status":           { "enum": ["in_progress", "completed", "abandoned"] },  
+    "startedAt":        { "type": "string", "format": "date-time" },  
+    "completedAt":      { "type": ["string", "null"], "format": "date-time" },  
+    "updatedAt":        { "type": "string", "format": "date-time" },  
+    "values": {  
+      "type": "object",  
+      "description": "Component id -> value. Repeat groups are arrays of objects.",  
+      "additionalProperties": true  
+    },  
+    "metadata": {  
+      "type": "object",  
+      "description": "Freeform: source, device, notes, etc.",  
+      "additionalProperties": true  
+    }  
+  },  
+  "additionalProperties": false  
+}
