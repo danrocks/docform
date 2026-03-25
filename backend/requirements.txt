@@ -9,3 +9,4 @@ python-jose[cryptography]==3.3.0
 aiofiles==24.1.0
 openai>=1.0.0
 pydantic-settings>=2.13.1
+google-genai>=1.68.0

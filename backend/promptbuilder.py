@@ -1,7 +1,8 @@
 import json
+from fastapi.encoders import jsonable_encoder
 from pathlib import Path
 
-_SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schema"  
+_SCHEMA_DIR = Path(__file__).resolve().parent / "schema"  
 def _build_system_prompt() -> str:  
     """Build the system prompt by loading and embedding schemas at startup."""  
     import copy  

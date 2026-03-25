@@ -14,7 +14,7 @@ from typing import Optional
 from auth_utils import get_current_user, require_role
 from question_schema import validate_questions, DEFAULT_CONFIGS
 from config import settings
-from fastapi.encoders import jsonable_encoder
+
 from promptbuilder import _build_system_prompt
 router = APIRouter()
 
@@ -22,7 +22,7 @@ TEMPLATES_DATA = Path("data/templates")
 TEMPLATES_UPLOAD = Path("uploads/templates")
 
   
-OPENAI_SYSTEM_PROMPT = "_build_system_prompt()"
+OPENAI_SYSTEM_PROMPT = _build_system_prompt()
 
 def read_templates() -> list:
     out = []
@@ -51,14 +51,7 @@ def extract_placeholders_from_docx(path: Path) -> List[str]:
 
 @router.get("/ai-status")
 def ai_status(current_user: dict = Depends(get_current_user)):
-    print ("Debug: checking AI status")
-    #comsole_log = f"Calling OpenAI API with model {model} and prompt: {prompt[:100]}..."
-    #print(comsole_log)
-    
-    # logging.basicConfig(level=logging.INFO)   
-    # logger = logging.getLogger(__name__)  # at top of module
-    # logger.debug("Detailed debug info")
-    # logger.info("Calling OpenAI API")
+    print ("Debug: checking OPEN_AI status")
     api_key = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
     sys.stdout.write(f"Key {api_key}\n")
     return {"available": bool(api_key)}
@@ -224,6 +217,36 @@ def _create_docx_from_content(document_content: str, output_path: Path):
     doc.save(str(output_path))
 
 
+def _call_gemini(prompt, model):
+    from google import genai
+    from google.genai import types
+
+    api_key = os.environ.get("GEMINI_KEY", settings.GEMINI_KEY)
+    if not api_key:
+        raise HTTPException(status_code=501, detail="AI generation not configured")
+
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model=model,
+        contents=[
+            types.ContentItem(
+                text=prompt
+            )
+        ],
+        temperature=0.2,
+        max_output_tokens=2000,
+    )
+    text = response.text
+    try:
+        print(text)
+        parsed = json.loads(text)
+    except Exception:
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if not m:
+            raise ValueError("AI response did not contain valid JSON")
+        parsed = json.loads(m.group(0))
+    return parsed
+
 
 def _call_openai(prompt, model):
     import json
@@ -314,9 +337,9 @@ def generate_template(
         raise HTTPException(status_code=501, detail="AI generation not configured")
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-
-    ai_result = _call_openai(body.prompt, model)
-
+    print(body.prompt)
+    # ai_result = _call_openai(body.prompt, model)
+    ai_result = _call_gemini(body.prompt, "gemini-2.0-flash")
     document_content = ai_result.get("document_content", "")
     raw_questions = ai_result.get("questions", [])
 
