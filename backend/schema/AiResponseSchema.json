@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2019-09/schema",  
   "title": "AI Template Generation Response",  
   "type": "object",  
-  "required": ["documentUrl", "interviewUrl"],  
+  "required": ["document", "interview"],  
   "properties": {  
-    "documentUrl":    { "type": "string", "format": "uri-reference", "description": "Download link for the .docx template" },  
-    "interviewUrl":   { "type": "string", "format": "uri-reference", "description": "Download link for the interview .json file" },  
+    "document":       { "type": "string", "format": "base64", "description": "Base64-encoded .docx template" },
+    "interview":      { "type": "string", "format": "base64", "description": "Base64-encoded interview .json file" },
     "summary":        { "type": "string", "description": "Brief description of what was created" },  
     "placeholderCount": { "type": "integer", "minimum": 1, "description": "Number of unique placeholders" }  
   },  

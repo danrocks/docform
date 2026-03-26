@@ -1,5 +1,4 @@
 import json
-from fastapi.encoders import jsonable_encoder
 from pathlib import Path
 
 _SCHEMA_DIR = Path(__file__).resolve().parent / "schema"  
@@ -22,7 +21,8 @@ def _build_system_prompt() -> str:
         """Recursively replace $ref to #/$defs/component with inline oneOf."""  
         if isinstance(obj, dict):  
             if obj.get("$ref") == "#/$defs/component":  
-                return {"oneOf": component_types}  
+                #return {"oneOf": component_types}  
+                return {"oneOf": copy.deepcopy(component_types)}
             return {k: resolve_component_refs(v) for k, v in obj.items()}  
         if isinstance(obj, list):  
             return [resolve_component_refs(item) for item in obj]  

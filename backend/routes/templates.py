@@ -14,6 +14,7 @@ from typing import Optional
 from auth_utils import get_current_user, require_role
 from question_schema import validate_questions, DEFAULT_CONFIGS
 from config import settings
+from AiResponseSaver import AiResponseSaver
 
 from promptbuilder import _build_system_prompt
 router = APIRouter()
@@ -226,20 +227,38 @@ def _call_gemini(prompt, model):
         raise HTTPException(status_code=501, detail="AI generation not configured")
 
     client = genai.Client(api_key=api_key)
+    print("attempting to call gemini api")
     response = client.models.generate_content(
         model=model,
-        contents=[
-            types.ContentItem(
-                text=prompt
-            )
-        ],
-        temperature=0.2,
-        max_output_tokens=2000,
+        contents= prompt,
+        config={
+            "system_instruction": OPENAI_SYSTEM_PROMPT,
+            "response_mime_type": "application/json",
+            # "response_json_schema": Recipe.model_json_schema(),
+        },
     )
+    print("response complete")
+    #print("response type:", type(resp))
+    #print("repr(response)[:500]:", repr(resp)[:500])
+    #print("public attributes:", [a for a in dir(resp) if not a.startswith("_")])
+
     text = response.text
+    # write text to a file for debugging
+    with open("gemini_response_debug.txt", "w", encoding="utf-8") as f:
+        f.write(text)
+
     try:
+        print()
+        #print("responsemime:", response.mime_type )
         print(text)
         parsed = json.loads(text)
+
+        saver = AiResponseSaver(backend_root=r"c:\Users\danie\Documents\docform")
+        json_str = text
+        docx_path, interview_path = saver.save_from_json_string(json_str, "backend/schema/AiResponseSchema.json", output_rel="data/templates", stem="AiResponseSchema")
+        print(docx_path, interview_path)
+
+
     except Exception:
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if not m:
@@ -339,7 +358,10 @@ def generate_template(
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
     print(body.prompt)
     # ai_result = _call_openai(body.prompt, model)
-    ai_result = _call_gemini(body.prompt, "gemini-2.0-flash")
+    ai_result = _call_gemini(body.prompt, "gemini-2.5-flash")
+
+    print(ai_result)
+
     document_content = ai_result.get("document_content", "")
     raw_questions = ai_result.get("questions", [])
 
