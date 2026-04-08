@@ -20,6 +20,13 @@ class AiResponseSaver:
 
     Methods:
       save_from_json_string(json_string, schema_path, output_rel=None, stem=None)
+    
+    # Example usage (commented):
+    # saver = AiResponseSaver(backend_root=r"c:\\Users\\danie\\Documents\\docform")
+    # json_str = '{"document":"Hello world","interview":{"q":"a"}}'
+    # docx_path, interview_path = saver.save_from_json_string(json_str, "schema/AiResponseSchema.json", output_rel="data/templates", stem="AiResponseSchema")
+    # print(docx_path, interview_path)
+    
     """
 
     def __init__(self, backend_root: Optional[Union[str, Path]] = None, default_output_rel: str = "data/templates"):

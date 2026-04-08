@@ -253,9 +253,9 @@ def _call_gemini(prompt, model):
         print(text)
         parsed = json.loads(text)
 
-        saver = AiResponseSaver(backend_root=r"c:\Users\danie\Documents\docform")
+        saver = AiResponseSaver(backend_root=r"c:\Users\danie\Documents\docform\backend")
         json_str = text
-        docx_path, interview_path = saver.save_from_json_string(json_str, "backend/schema/AiResponseSchema.json", output_rel="data/templates", stem="AiResponseSchema")
+        docx_path, interview_path = saver.save_from_json_string(json_str, "schema/AiResponseSchema.json", output_rel="data/templates", stem="AiResponseSchema")
         print(docx_path, interview_path)
 
 
