@@ -90,7 +90,7 @@ class AiResponseSaver:
                 return v
         return None
 
-    def _save_document_as_docx(self, content: Union[str, bytes, dict], stem: str, out_dir: Path, file_id=none) -> Path:
+    def _save_document_as_docx(self, content: Union[str, bytes, dict], stem: str, out_dir: Path, file_id=None) -> Path:
         if content is None:
             raise ValueError("Document content is empty")
 
@@ -126,7 +126,7 @@ class AiResponseSaver:
         doc.save(path)
         return path
 
-    def _save_interview_as_json(self, content: Union[str, bytes, dict, list], stem: str, out_dir: Path, file_id=none) -> Path:
+    def _save_interview_as_json(self, content: Union[str, bytes, dict, list], stem: str, out_dir: Path, file_id=None) -> Path:
         if content is None:
             raise ValueError("Interview content is empty")
 
