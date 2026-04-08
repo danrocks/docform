@@ -178,7 +178,7 @@ def delete_template(
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
     template = json.loads(path.read_text())
-    docx_path = TEMPLATES_UPLOAD / template["stored_filename"]
+    docx_path = TEMPLATES_DATA / template["stored_filename"]
     if docx_path.exists():
         docx_path.unlink()
     path.unlink()
@@ -244,9 +244,13 @@ def _call_gemini(prompt, model):
 
     text = response.text
     # write text to a file for debugging
-    with open("gemini_response_debug.txt", "w", encoding="utf-8") as f:
-        f.write(text)
-
+    #with open("gemini_response_debug.txt", "w", encoding="utf-8") as f:
+    #    f.write(text)
+    raw_uuid = uuid.uuid4().hex[:8]  
+    raw_filename = f"AiResponseSchema_{raw_uuid}_raw.json"  
+    TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)  
+    (TEMPLATES_DATA / raw_filename).write_text(text, encoding="utf-8")
+    
     try:
         print()
         #print("responsemime:", response.mime_type )
@@ -379,7 +383,8 @@ def generate_template(
     # Create docx file
     template_id = str(uuid.uuid4())
     filename = f"{template_id}.docx"
-    upload_path = TEMPLATES_UPLOAD / filename
+    # upload_path = TEMPLATES_UPLOAD / filename
+    upload_path = TEMPLATES_DATA / filename
 
     try:
         _create_docx_from_content(document_content, upload_path)
@@ -438,7 +443,7 @@ def regenerate_template(
         raise HTTPException(status_code=500, detail=f"AI generated invalid questions: {e}")
 
     # Overwrite existing docx
-    upload_path = TEMPLATES_UPLOAD / template["stored_filename"]
+    upload_path = TEMPLATES_DATA / template["stored_filename"]
     try:
         _create_docx_from_content(document_content, upload_path)
     except Exception as e:
