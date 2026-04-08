@@ -87,7 +87,7 @@ async def create_template(
 
     template_id = str(uuid.uuid4())
     filename = f"{template_id}.docx"
-    upload_path = TEMPLATES_UPLOAD / filename
+    upload_path = TEMPLATES_DATA / filename
 
     content = await file.read()
     upload_path.write_bytes(content)
