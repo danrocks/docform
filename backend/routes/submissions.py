@@ -119,7 +119,7 @@ def create_submission(
 def generate_documents(template: dict, submission: dict):
     """Fill the docx template and convert to PDF."""
     GENERATED.mkdir(parents=True, exist_ok=True)
-    src = TEMPLATES_UPLOAD / template["stored_filename"]
+    src = TEMPLATES_DATA / template["stored_filename"]
     if not src.exists():
         raise FileNotFoundError(f"Template file not found: {src}")
 
