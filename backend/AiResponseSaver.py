@@ -79,8 +79,8 @@ class AiResponseSaver:
 
         file_stem = stem or "schema"
         docx_path = self._save_document_as_docx(document_content, file_stem, out_dir, file_id=file_id)
-        interview_path = self._save_interview_as_json(interview_content, file_stem, out_dir, file_id=file-Id)
-return docx_path, interview_path
+        interview_path = self._save_interview_as_json(interview_content, file_stem, out_dir, file_id=file_id)
+        return docx_path, interview_path
 
     def _find_key(self, data: dict, key_name: str):
         if key_name in data:
@@ -90,13 +90,13 @@ return docx_path, interview_path
                 return v
         return None
 
-    def _save_document_as_docx(self, content: Union[str, bytes, dict], stem: str, out_dir: Path) -> Path:
+    def _save_document_as_docx(self, content: Union[str, bytes, dict], stem: str, out_dir: Path, file_id=none) -> Path:
         if content is None:
             raise ValueError("Document content is empty")
 
         # If bytes: write directly as .docx bytes
         if isinstance(content, (bytes, bytearray)):
-            path = out_dir / self._unique_name(stem, ".docx")
+            path = out_dir / self._unique_name(stem, ".docx",file_id=file_id)
             path.write_bytes(bytes(content))
             return path
 
@@ -105,7 +105,7 @@ return docx_path, interview_path
         try:
             decoded = base64.b64decode(content, validate=True)
             if self._looks_like_docx_bytes(decoded):
-                path = out_dir / self._unique_name(stem, ".docx")
+                path = out_dir / self._unique_name(stem, ".docx",file_id=file_id)
                 path.write_bytes(decoded)
                 return path
             try:
@@ -122,11 +122,11 @@ return docx_path, interview_path
         lines = text.splitlines() or [""]
         for line in lines:
             doc.add_paragraph(line)
-        path = out_dir / self._unique_name(stem, ".docx")
+        path = out_dir / self._unique_name(stem, ".docx",file_id=file_id)
         doc.save(path)
         return path
 
-    def _save_interview_as_json(self, content: Union[str, bytes, dict, list], stem: str, out_dir: Path) -> Path:
+    def _save_interview_as_json(self, content: Union[str, bytes, dict, list], stem: str, out_dir: Path, file_id=none) -> Path:
         if content is None:
             raise ValueError("Interview content is empty")
 
@@ -160,7 +160,7 @@ return docx_path, interview_path
                     except Exception:
                         parsed = {"data": content}
 
-        path = out_dir / self._unique_name(stem, ".json")
+        path = out_dir / self._unique_name(stem, ".json",file_id=file_id)
         path.write_text(json.dumps(parsed, indent=2, ensure_ascii=False), encoding="utf-8")
         return path
 
