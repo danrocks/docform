@@ -39,6 +39,7 @@ class AiResponseSaver:
         schema_path: str,
         output_rel: Optional[str] = None,
         stem: Optional[str] = None,
+        file_id=None
     ) -> Tuple[Path, Path]:
         """
         Validate json_string against schema_path (resolved relative to backend_root if needed),
@@ -77,9 +78,9 @@ class AiResponseSaver:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         file_stem = stem or "schema"
-        docx_path = self._save_document_as_docx(document_content, file_stem, out_dir)
-        interview_path = self._save_interview_as_json(interview_content, file_stem, out_dir)
-        return docx_path, interview_path
+        docx_path = self._save_document_as_docx(document_content, file_stem, out_dir, file_id=file_id)
+        interview_path = self._save_interview_as_json(interview_content, file_stem, out_dir, file_id=file-Id)
+return docx_path, interview_path
 
     def _find_key(self, data: dict, key_name: str):
         if key_name in data:
@@ -166,11 +167,12 @@ class AiResponseSaver:
     def _looks_like_docx_bytes(self, b: bytes) -> bool:
         return len(b) > 2 and b[:2] == b"PK"
 
-    def _unique_name(self, stem: str, suffix: str) -> str:
-        safe = "".join(c for c in (stem or "file") if c.isalnum() or c in ("-", "_")).rstrip("._-")
-        if not safe:
-            safe = "file"
-        return f"{safe}_{uuid.uuid4().hex[:8]}{suffix}"
+    def _unique_name(self, stem: str, suffix: str, file_id: str = None) -> str:  
+        safe = "".join(c for c in (stem or "file") if c.isalnum() or c in ("-", "_")).rstrip("._-")  
+        if not safe:  
+            safe = "file"  
+        uid = file_id or uuid.uuid4().hex[:8]  
+        return f"{safe}_{uid}{suffix}"
 
 
 # Example usage (commented):

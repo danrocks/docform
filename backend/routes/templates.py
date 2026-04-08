@@ -246,20 +246,24 @@ def _call_gemini(prompt, model):
     # write text to a file for debugging
     #with open("gemini_response_debug.txt", "w", encoding="utf-8") as f:
     #    f.write(text)
-    raw_uuid = uuid.uuid4().hex[:8]  
-    raw_filename = f"AiResponseSchema_{raw_uuid}_raw.json"  
-    TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)  
-    (TEMPLATES_DATA / raw_filename).write_text(text, encoding="utf-8")
-    
+    shared_uuid = uuid.uuid4().hex[:8]
+    shared_filename = f"AiResponseSchema_{shared_uuid}_shared.json"
+    TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)
+    (TEMPLATES_DATA / shared_filename).write_text(text, encoding="utf-8")
+
     try:
         print()
         #print("responsemime:", response.mime_type )
         print(text)
         parsed = json.loads(text)
-
-        saver = AiResponseSaver(backend_root=r"c:\Users\danie\Documents\docform\backend")
         json_str = text
-        docx_path, interview_path = saver.save_from_json_string(json_str, "schema/AiResponseSchema.json", output_rel="data/templates", stem="AiResponseSchema")
+
+        saver = AiResponseSaver(backend_root=r"c:\Users\danie\Documents\docform\backend")  
+        docx_path, interview_path = saver.save_from_json_string(  
+        json_str, "schema/AiResponseSchema.json",  
+        output_rel="data/templates", stem="AiResponseSchema",  
+        file_id=shared_uuid  
+)        
         print(docx_path, interview_path)
 
 
