@@ -15,6 +15,7 @@ from auth_utils import get_current_user, require_role
 from question_schema import validate_questions, DEFAULT_CONFIGS
 from config import settings
 from AiResponseSaver import AiResponseSaver
+from datetime import datetime
 
 from promptbuilder import _build_system_prompt
 router = APIRouter()
@@ -227,7 +228,8 @@ def _call_gemini(prompt, model):
         raise HTTPException(status_code=501, detail="AI generation not configured")
 
     client = genai.Client(api_key=api_key)
-    print("attempting to call gemini api")
+    print(datetime.utcnow().strftime("%Y%m%d %M:%S"))
+    print("attempting to call gemini api with model ", model)
     response = client.models.generate_content(
         model=model,
         contents= prompt,
@@ -238,6 +240,13 @@ def _call_gemini(prompt, model):
         },
     )
     print("response complete")
+    print(datetime.utcnow().strftime("%Y%m%d %M:%S"))
+    if response.candidates and response.candidates[0].finish_reason.name != "STOP": 
+        exception = ValueError(f"Gemini response finish reason: {response.candidates[0].finish_reason.name}")
+        print(exception)    
+        raise exception
+
+
     #print("response type:", type(resp))
     #print("repr(response)[:500]:", repr(resp)[:500])
     #print("public attributes:", [a for a in dir(resp) if not a.startswith("_")])
@@ -258,7 +267,7 @@ def _call_gemini(prompt, model):
         parsed = json.loads(text)
         json_str = text
 
-        saver = AiResponseSaver(backend_root=r"c:\Users\danie\Documents\docform\backend")  
+        saver = AiResponseSaver(backend_root=Path(__file__).resolve().parent.parent)  
         docx_path, interview_path = saver.save_from_json_string(  
         json_str, "schema/AiResponseSchema.json",  
         output_rel="data/templates", stem="AiResponseSchema",  
@@ -300,6 +309,10 @@ def _call_openai(prompt, model):
             max_tokens=2000,
         )
         print(f"    Debug: raw AI response object {resp}")
+
+        if resp.choices[0].finish_reason == "length":  
+            raise ValueError("OpenAI response truncated due to max_tokens limit")
+
         # try several ways to extract the message content
         try:
             text = resp.choices[0].message.content
@@ -366,7 +379,9 @@ def generate_template(
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
     print(body.prompt)
     # ai_result = _call_openai(body.prompt, model)
-    ai_result = _call_gemini(body.prompt, "gemini-2.5-flash")
+    #ai_result = _call_gemini(body.prompt, "gemini-2.5-flash")
+    #ai_result = _call_gemini(body.prompt, "gemini-2.5-flash-preview-04-17")
+    ai_result = _call_gemini(body.prompt, "gemini-1.5-flash")
 
     print(ai_result)
 
