@@ -246,11 +246,6 @@ def _call_gemini(prompt, model):
         print(exception)    
         raise exception
 
-
-    #print("response type:", type(resp))
-    #print("repr(response)[:500]:", repr(resp)[:500])
-    #print("public attributes:", [a for a in dir(resp) if not a.startswith("_")])
-
     text = response.text
     # write text to a file for debugging
     #with open("gemini_response_debug.txt", "w", encoding="utf-8") as f:
@@ -272,10 +267,8 @@ def _call_gemini(prompt, model):
         json_str, "schema/AiResponseSchema.json",  
         output_rel="data/templates", stem="AiResponseSchema",  
         file_id=shared_uuid  
-)        
+        )        
         print(docx_path, interview_path)
-
-
     except Exception:
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if not m:
@@ -306,7 +299,7 @@ def _call_openai(prompt, model):
             ],
             temperature=0.2,
             #temperature=1.5,
-            max_tokens=2000,
+            max_tokens=20000,
         )
         print(f"    Debug: raw AI response object {resp}")
 
@@ -330,30 +323,32 @@ def _call_openai(prompt, model):
     print("here")
     # Fallback to older openai package if needed
     if not text:
-        try:
-            import openai
-            openai.api_key = api_key
-            resp = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": OPENAI_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-                max_tokens=2000,
-            )
-            try:
-                text = resp.choices[0].message.content
-            except Exception:
-                try:
-                    text = resp.choices[0].message["content"]
-                except Exception:
-                    try:
-                        text = resp.choices[0].text
-                    except Exception:
-                        text = str(resp)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"AI API error: {e}")
+        #no point continuing, throw error
+        raise ValueError("OpenAI API call failed")
+    #     try:
+    #         import openai
+    #         openai.api_key = api_key
+    #         resp = openai.ChatCompletion.create(
+    #             model=model,
+    #             messages=[
+    #                 {"role": "system", "content": OPENAI_SYSTEM_PROMPT},
+    #                 {"role": "user", "content": prompt},
+    #             ],
+    #             temperature=0.2,
+    #             max_tokens=2000,
+    #         )
+    #         try:
+    #             text = resp.choices[0].message.content
+    #         except Exception:
+    #             try:
+    #                 text = resp.choices[0].message["content"]
+    #             except Exception:
+    #                 try:
+    #                     text = resp.choices[0].text
+    #                 except Exception:
+    #                     text = str(resp)
+    #     except Exception as e:
+    #         raise HTTPException(status_code=500, detail=f"AI API error: {e}")
 
     print(f"    Debug: raw AI response {text[:500]}...")
     # parse JSON from model output robustly
@@ -378,10 +373,11 @@ def generate_template(
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
     print(body.prompt)
-    # ai_result = _call_openai(body.prompt, model)
+    #ai_result = _call_openai(body.prompt, model)
+    ai_result = _call_openai(body.prompt, "gpt-5-2025-08-07")   
     #ai_result = _call_gemini(body.prompt, "gemini-2.5-flash")
     #ai_result = _call_gemini(body.prompt, "gemini-2.5-flash-preview-04-17")
-    ai_result = _call_gemini(body.prompt, "gemini-1.5-flash")
+   # ai_result = _call_gemini(body.prompt, "gemini-1.5-flash")
 
     print(ai_result)
 
@@ -477,7 +473,7 @@ def regenerate_template(
     return template
 
 
-async def generate_template(body, request: Request):
+async def generate_template_async(body, request: Request):
     # ...existing code...
     try:
         ai_result = _call_openai(body.prompt, body.model if getattr(body, "model", None) else "gpt-4o")
