@@ -1,6 +1,18 @@
-from abc import ABC, abstractmethodfrom typing import Dict, Type, Anyclass AIProvider(ABC):    """Minimal provider API: one call() method like _call_gemini."""    @abstractmethod    def call(self, prompt: str, *, mode: str = "document", **kwargs) -> Dict[str, Any]:        """        mode: 'document' -> return {'bytes': b'...', 'filename': 'x.docx'}              'template' -> return {'template': {...}}
-        """
-        raise NotImplementedError
+from abc import ABC, abstractmethod 
+from typing import Dict, Type, Anyclass 
+
+import asyncio  
+  
+class AIProvider(ABC):  
+    """Minimal provider API: one call() method like _call_gemini."""  
+  
+    @abstractmethod  
+    def call(self, prompt: str, *, mode: str = "document", **kwargs) -> Dict[str, Any]:  
+        raise NotImplementedError  
+  
+    async def acall(self, prompt: str, *, mode: str = "document", **kwargs) -> Dict[str, Any]:  
+        """Async version. Default wraps call() in a thread. Override for native async."""  
+        return await asyncio.run_in_executor(None, lambda: self.call(prompt, mode=mode, **kwargs))
 
 _PROVIDERS: Dict[str, Type[AIProvider]] = {}
 
