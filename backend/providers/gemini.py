@@ -7,9 +7,7 @@ import json
 import re
 
 from fastapi import HTTPException
-
-from ..ai_providers import AIProvider, register_provider
-
+from ai_providers import AIProvider, register_provider
 
 @register_provider("gemini")
 class GeminiProvider(AIProvider):

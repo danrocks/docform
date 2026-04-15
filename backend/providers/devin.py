@@ -8,7 +8,7 @@ import asyncio
 import httpx  
 from fastapi import HTTPException  
   
-from ..ai_providers import AIProvider, register_provider  
+from ai_providers import AIProvider, register_provider  
   
   
 @register_provider("devin")  
@@ -39,19 +39,19 @@ class DevinProvider(AIProvider):
         api_key = self.api_key or os.environ.get("DEVIN_KEY")  
         if not api_key:  
             try:  
-                from ..config import settings as _settings  
+                from config import settings as _settings  
                 api_key = getattr(_settings, "DEVIN_KEY", None)  
             except Exception:
                 pass  
         if not api_key:  
-            raise HTTPException(status_code=501, detail="Devin API key not configured")  
+            raise HTTPException(status_code=501, detail="Devin key not configured")  
         return api_key  
   
     def _get_system_prompt(self) -> str:  
         system_prompt = self.system_prompt  
         if not system_prompt:  
             try:  
-                from ..config import settings as _settings  
+                from config import settings as _settings  
                 system_prompt = getattr(_settings, "OPENAI_SYSTEM_PROMPT", None)  
             except Exception:  
                 pass  
@@ -147,6 +147,10 @@ then base64-encode them for the structured output.
             "Content-Type": "application/json",  
         }  
   
+        print(repr(prompt))
+
+        print(repr(session_prompt))
+
         # 1. Create the session  
         async with httpx.AsyncClient(timeout=30) as client:  
             create_resp = await client.post(  
@@ -159,6 +163,7 @@ then base64-encode them for the structured output.
             )  
   
         if create_resp.status_code != 200:  
+            print(f"Devin session creation error: {create_resp.status_code} {create_resp.text}")
             raise HTTPException(  
                 status_code=502,  
                 detail=f"Devin session creation failed: {create_resp.status_code} {create_resp.text}",  
