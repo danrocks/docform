@@ -36,12 +36,12 @@ class DevinProvider(AIProvider):
         self.system_prompt = system_prompt  
   
     def _get_api_key(self) -> str:  
-        api_key = self.api_key or os.environ.get("DEVIN_API_KEY")  
+        api_key = self.api_key or os.environ.get("DEVIN_KEY")  
         if not api_key:  
             try:  
                 from ..config import settings as _settings  
-                api_key = getattr(_settings, "DEVIN_API_KEY", None)  
-            except Exception:  
+                api_key = getattr(_settings, "DEVIN_KEY", None)  
+            except Exception:
                 pass  
         if not api_key:  
             raise HTTPException(status_code=501, detail="Devin API key not configured")  
@@ -214,3 +214,4 @@ then base64-encode them for the structured output.
   
         # 4. Save artifacts  
         return self._save_output(structured_output)
+    

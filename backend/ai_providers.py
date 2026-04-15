@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod 
-from typing import Dict, Type, Anyclass 
+from typing import Dict, Type, Any 
 
 import asyncio  
   
