@@ -63,12 +63,22 @@ Your task: create TWO files based on the user's request below, then output
 them as a JSON object via structured_output.  
   
 INSTRUCTIONS:  
-Get syste instructions from web page https://github.com/danrocks/docform/blob/master/backend/prompts/devinprompt.md.
+Get system instructions from web page https://github.com/danrocks/docform/blob/master/backend/prompts/devinprompt.md.
 The web page includes detailed instructions and examples for how to format the document and interview JSON, including how to represent placeholders. Follow those instructions carefully.
 Follow any links in the instructions to get schema details. 
   
 USER REQUEST:  
 {prompt}  
+
+CRITICAL — FINAL STEP:  
+After creating both files, you MUST use the structured_output tool to return a JSON object with these fields:  
+- "document": the download URL for the .docx file you created  
+- "interview": the download URL for the .json file you created  
+- "summary": a brief description of what was created  
+- "placeholderCount": the number of unique placeholders  
+  
+Do NOT consider the task complete until you have called structured_output with this JSON.  
+
 """  
   
     def _structured_schema(self) -> dict:  
@@ -173,8 +183,9 @@ USER REQUEST:
                 print(f"Devin session {session_id}: {status} ({elapsed}s)")  
   
                 if status == "finished":  
+                    print("Devin call finished successfully")
                     break  
-                elif status in ("stopped", "failed"):  
+                elif status in ("stopped", "failed", "blocked"):  
                     raise HTTPException(  
                         status_code=502,  
                         detail=f"Devin session {status}: {status_data.get('error', 'unknown')}",  
