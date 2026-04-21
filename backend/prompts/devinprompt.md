@@ -299,11 +299,6 @@ e.g. Show a warning component if `end\_date` is before `start\_date`.
 4. Design the interview with appropriate types, configs, grouping, and rules.
 5. Create the Word document (`.docx`) using `python-docx` with proper formatting.
 6. Create the interview definition JSON, validated against the schema.
-7. Use the `structured_output` tool to return a JSON object matchine schema  https://github.com/danrocks/docform/blob/master/backend/schema/AiResponseSchemaFile.json with:  
-   - `"document"`: download URL for the .docx file  
-   - `"interview"`: download URL for the .json file  
-   - `"summary"`: brief description of what was created  
-   - `"placeholderCount"`: number of unique placeholders  
+7. Return url to the documents created
   
-**Do NOT finish the session without calling structured_output.**
 

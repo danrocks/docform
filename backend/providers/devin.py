@@ -69,16 +69,6 @@ Follow any links in the instructions to get schema details.
   
 USER REQUEST:  
 {prompt}  
-
-CRITICAL — FINAL STEP:  
-After creating both files, you MUST use the structured_output tool to return a JSON object with these fields:  
-- "document": the download URL for the .docx file you created  
-- "interview": the download URL for the .json file you created  
-- "summary": a brief description of what was created  
-- "placeholderCount": the number of unique placeholders  
-  
-Do NOT consider the task complete until you have called structured_output with this JSON.  
-
 """  
   
     def _structured_schema(self) -> dict:  
@@ -178,7 +168,8 @@ Do NOT consider the task complete until you have called structured_output with t
                     print(f"Devin poll error: {status_resp.status_code}")  
                     continue  
   
-                status_data = status_resp.json()  
+                status_data = status_resp.json()
+                print(status_data) 
                 status = status_data.get("status_enum")  
                 print(f"Devin session {session_id}: {status} ({elapsed}s)")  
   
