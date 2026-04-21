@@ -7,10 +7,8 @@ import asyncio
   
 import httpx  
 from fastapi import HTTPException  
-  
 from ai_providers import AIProvider, register_provider  
-  
-  
+
 @register_provider("devin")  
 class DevinProvider(AIProvider):  
     """  
@@ -65,21 +63,12 @@ Your task: create TWO files based on the user's request below, then output
 them as a JSON object via structured_output.  
   
 INSTRUCTIONS:  
-{system_prompt}  
+Get systen instrunction from web page https://github.com/danrocks/docform/blob/master/backend/prompts/devinprompt.md.
+The web page includes detailed instructions and examples for how to format the document and interview JSON, including how to represent placeholders. Follow those instructions carefully.
+Follow any links in the instructions to get sechema details. 
   
 USER REQUEST:  
 {prompt}  
-  
-STEPS:  
-1. Create a Word document template (.docx) using python-docx with proper  
-   formatting (Heading styles, bold labels, tables where appropriate,  
-   headers/footers). Use {{{{camelCase}}}} placeholder tags for variable content.  
-2. Create an interview definition (.json) conforming to the InterviewSchema.  
-3. Base64-encode both files.  
-4. Return the result as structured_output matching the schema provided.  
-  
-Use `pip install python-docx` if needed. Write the files to /tmp/ first,  
-then base64-encode them for the structured output.  
 """  
   
     def _structured_schema(self) -> dict:  
@@ -87,8 +76,8 @@ then base64-encode them for the structured output.
             "type": "object",  
             "required": ["document", "interview"],  
             "properties": {  
-                "document": {"type": "string", "description": "Base64-encoded .docx template file"},  
-                "interview": {"type": "string", "description": "Base64-encoded interview .json file"},  
+                "document": {"type": "string", "description": "url to generated Word document"},  
+                "interview": {"type": "string", "description": "url to constructed template interview JSON"},  
                 "summary": {"type": "string", "description": "Brief description of what was created"},  
                 "placeholderCount": {"type": "integer", "minimum": 1, "description": "Number of unique placeholders"},  
             },  
@@ -96,6 +85,7 @@ then base64-encode them for the structured output.
   
     def _save_output(self, structured_output: dict) -> dict:  
         """Save via AiResponseSaver, same pattern as GeminiProvider."""  
+        print (f"Devin structured output: {structured_output}")
         shared_uuid = uuid.uuid4().hex[:8]  
         json_str = json.dumps(structured_output)  
   

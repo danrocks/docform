@@ -17,26 +17,28 @@ from config import settings
 from AiResponseSaver import AiResponseSaver
 from datetime import datetime
 
-from promptbuilder import _build_system_prompt
+from prompts.promptbuilder import _build_system_prompt
 import providers  # noqa: F401 — triggers provider self-registration  
 from ai_providers import get_provider
 
-
 router = APIRouter()
 
-TEMPLATES_DATA = Path("data/templates")
+TEMPLATES_DATA = Path("..") / "data" / "templates"
 TEMPLATES_UPLOAD = Path("uploads/templates")
 
-  
 OPENAI_SYSTEM_PROMPT = _build_system_prompt()
 
 def read_templates() -> list:
     out = []
+    print("here")
+    print(TEMPLATES_DATA)
     for f in TEMPLATES_DATA.glob("*.json"):
         try:
+            print(f"Debug: loading template... {f.name}")
             out.append(json.loads(f.read_text()))
         except Exception:
             pass
+    print( out)
     return sorted(out, key=lambda x: x.get("created_at", ""), reverse=True)
 
 

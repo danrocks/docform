@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-_SCHEMA_DIR = Path(__file__).resolve().parent / "schema"  
+_SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schema"  
 def _build_system_prompt() -> str:  
     """Build the system prompt by loading and embedding schemas at startup."""  
     import copy  
