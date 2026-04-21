@@ -63,7 +63,7 @@ Your task: create TWO files based on the user's request below, then output
 them as a JSON object via structured_output.  
   
 INSTRUCTIONS:  
-Get systen instrunction from web page https://github.com/danrocks/docform/blob/master/backend/prompts/devinprompt.md.
+Get syste instructions from web page https://github.com/danrocks/docform/blob/master/backend/prompts/devinprompt.md.
 The web page includes detailed instructions and examples for how to format the document and interview JSON, including how to represent placeholders. Follow those instructions carefully.
 Follow any links in the instructions to get sechema details. 
   

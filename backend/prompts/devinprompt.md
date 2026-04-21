@@ -299,15 +299,7 @@ e.g. Show a warning component if `end\_date` is before `start\_date`.
 4. Design the interview with appropriate types, configs, grouping, and rules.
 5. Create the Word document (`.docx`) using `python-docx` with proper formatting.
 6. Create the interview definition JSON, validated against the schema.
-7. Upload both to DocForm via the API:
-
-```
-   POST /api/templates/  (multipart: name, description, file, interview\_json)
-   ```
-
 8. Return:
 
-   * Link to the template edit page: `{frontend\_url}/templates/{template\_id}/edit`
-   * Link to the template API: `{backend\_url}/api/templates/{template\_id}`
-   * Summary of what was created (component count, types used, rules added)
+   * Link to the docx and json created in format described at https://github.com/danrocks/docform/blob/master/backend/schema/AiResponseSchemaFile.json
 
