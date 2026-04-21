@@ -224,6 +224,8 @@ def _create_docx_from_content(document_content: str, output_path: Path):
         else:
             doc.add_paragraph(stripped)
     doc.save(str(output_path))
+
+
 def _call_ai(prompt: str, model: str | None = None) -> dict:  
     provider_name = os.environ.get("AI_PROVIDER", "devin")  
     provider = get_provider(provider_name, system_prompt=OPENAI_SYSTEM_PROMPT)  
@@ -232,64 +234,124 @@ def _call_ai(prompt: str, model: str | None = None) -> dict:
         kwargs["model"] = model  
     return provider.call(prompt, **kwargs)
 
-@router.post("/generate")
-def generate_template(
-    body: GenerateRequest,
-    current_user: dict = Depends(require_role("admin"))
-):
-    api_key = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
-    if not api_key:
-        raise HTTPException(status_code=501, detail="AI generation not configured")
-
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-    print(body.prompt)
-    
-    ai_result = _call_ai(body.prompt)
-    print(ai_result)
-
-    document_content = ai_result.get("document_content", "")
-    raw_questions = ai_result.get("questions", [])
-
-    if not document_content:
-        raise HTTPException(status_code=500, detail="AI did not generate document content")
-    if not raw_questions:
-        raise HTTPException(status_code=500, detail="AI did not generate interview questions")
-
-    # Validate questions
-    try:
-        fields = validate_questions(raw_questions)
-    except ValueError as e:
-        raise HTTPException(status_code=500, detail=f"AI generated invalid questions: {e}")
-
-    # Create docx file
-    template_id = str(uuid.uuid4())
-    filename = f"{template_id}.docx"
-    # upload_path = TEMPLATES_UPLOAD / filename
-    upload_path = TEMPLATES_DATA / filename
-
-    try:
-        _create_docx_from_content(document_content, upload_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create document: {e}")
-
-    template = {
-        "id": template_id,
-        "name": body.name,
-        "description": body.description or "",
-        "original_filename": f"{body.name.replace(' ', '_')}.docx",
-        "stored_filename": filename,
-        "fields": fields,
-        "active": True,
-        "created_at": datetime.utcnow().isoformat(),
-        "created_by": current_user["id"],
-        "submission_count": 0,
-        "generation_method": "ai",
-        "original_prompt": body.prompt,
-    }
-
-    (TEMPLATES_DATA / f"{template_id}.json").write_text(json.dumps(template, indent=2))
+@router.post("/generate")  
+def generate_template(  
+    body: GenerateRequest,  
+    current_user: dict = Depends(require_role("admin"))  
+):  
+    TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)  
+  
+    ai_result = _call_ai(body.prompt)  
+    print(ai_result)  
+  
+    fmt = ai_result.get("format")  # "url" | "base64" | None  
+    template_id = str(uuid.uuid4())  
+    filename = f"{template_id}.docx"  
+    upload_path = TEMPLATES_DATA / filename  
+  
+    # ── Route 1: URL (Devin) — download files into TEMPLATES_DATA ──  
+    if fmt == "url":  
+        import httpx as _httpx  
+  
+        doc_url = ai_result.get("document", "")  
+        int_url = ai_result.get("interview", "")  
+        if not doc_url or not int_url:  
+            raise HTTPException(status_code=500, detail="AI did not return document/interview URLs")  
+  
+        # Download .docx  
+        try:  
+            doc_resp = _httpx.get(doc_url, follow_redirects=True, timeout=60)  
+            doc_resp.raise_for_status()  
+            upload_path.write_bytes(doc_resp.content)  
+        except Exception as e:  
+            raise HTTPException(status_code=502, detail=f"Failed to download document from {doc_url}: {e}")  
+  
+        # Download interview JSON  
+        try:  
+            int_resp = _httpx.get(int_url, follow_redirects=True, timeout=60)  
+            int_resp.raise_for_status()  
+            interview_data = int_resp.json()  
+        except Exception as e:  
+            raise HTTPException(status_code=502, detail=f"Failed to download interview from {int_url}: {e}")  
+  
+        # Also persist the raw interview JSON to TEMPLATES_DATA for reference  
+        (TEMPLATES_DATA / f"{template_id}_interview.json").write_text(  
+            json.dumps(interview_data, indent=2)  
+        )  
+  
+        # Extract questions list  
+        if isinstance(interview_data, dict):  
+            raw_questions = interview_data.get("components", interview_data.get("questions", []))  
+        elif isinstance(interview_data, list):  
+            raw_questions = interview_data  
+        else:  
+            raise HTTPException(status_code=500, detail="Unexpected interview format")  
+  
+    # ── Route 2: base64 (Gemini) — decode into TEMPLATES_DATA ──  
+    elif fmt == "base64":  
+        doc_b64 = ai_result.get("document", "")  
+        int_b64 = ai_result.get("interview", "")  
+        if not doc_b64 or not int_b64:  
+            raise HTTPException(status_code=500, detail="AI did not return document/interview content")  
+  
+        try:  
+            upload_path.write_bytes(base64.b64decode(doc_b64))  
+        except Exception as e:  
+            raise HTTPException(status_code=500, detail=f"Failed to decode document: {e}")  
+  
+        try:  
+            interview_text = base64.b64decode(int_b64).decode("utf-8")  
+            interview_data = json.loads(interview_text)  
+        except Exception as e:  
+            raise HTTPException(status_code=500, detail=f"Failed to decode interview: {e}")  
+  
+        (TEMPLATES_DATA / f"{template_id}_interview.json").write_text(  
+            json.dumps(interview_data, indent=2)  
+        )  
+  
+        if isinstance(interview_data, dict):  
+            raw_questions = interview_data.get("components", interview_data.get("questions", []))  
+        elif isinstance(interview_data, list):  
+            raw_questions = interview_data  
+        else:  
+            raise HTTPException(status_code=500, detail="Unexpected interview format")  
+  
+    # ── Route 3: legacy (OpenAI) — plain text document_content ──  
+    else:  
+        document_content = ai_result.get("document_content", "")  
+        raw_questions = ai_result.get("questions", [])  
+        if not document_content:  
+            raise HTTPException(status_code=500, detail="AI did not generate document content")  
+        try:  
+            _create_docx_from_content(document_content, upload_path)  
+        except Exception as e:  
+            raise HTTPException(status_code=500, detail=f"Failed to create document: {e}")  
+  
+    if not raw_questions:  
+        raise HTTPException(status_code=500, detail="AI did not generate interview questions")  
+  
+    try:  
+        fields = validate_questions(raw_questions)  
+    except ValueError as e:  
+        raise HTTPException(status_code=500, detail=f"AI generated invalid questions: {e}")  
+  
+    template = {  
+        "id": template_id,  
+        "name": body.name,  
+        "description": body.description or ai_result.get("summary", ""),  
+        "original_filename": f"{body.name.replace(' ', '_')}.docx",  
+        "stored_filename": filename,  
+        "fields": fields,  
+        "active": True,  
+        "created_at": datetime.utcnow().isoformat(),  
+        "created_by": current_user["id"],  
+        "submission_count": 0,  
+        "generation_method": "ai",  
+        "original_prompt": body.prompt,  
+    }  
+  
+    (TEMPLATES_DATA / f"{template_id}.json").write_text(json.dumps(template, indent=2))  
     return template
-
 
 @router.post("/{template_id}/regenerate")
 def regenerate_template(

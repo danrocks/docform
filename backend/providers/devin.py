@@ -65,7 +65,7 @@ them as a JSON object via structured_output.
 INSTRUCTIONS:  
 Get syste instructions from web page https://github.com/danrocks/docform/blob/master/backend/prompts/devinprompt.md.
 The web page includes detailed instructions and examples for how to format the document and interview JSON, including how to represent placeholders. Follow those instructions carefully.
-Follow any links in the instructions to get sechema details. 
+Follow any links in the instructions to get schema details. 
   
 USER REQUEST:  
 {prompt}  
@@ -84,7 +84,7 @@ USER REQUEST:
         }  
   
     def _save_output(self, structured_output: dict) -> dict:  
-        """Save via AiResponseSaver, same pattern as GeminiProvider."""  
+
         print (f"Devin structured output: {structured_output}")
         shared_uuid = uuid.uuid4().hex[:8]  
         json_str = json.dumps(structured_output)  
