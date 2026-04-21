@@ -21,6 +21,15 @@ from prompts.promptbuilder import _build_system_prompt
 import providers  # noqa: F401 — triggers provider self-registration  
 from ai_providers import get_provider
 
+BACKEND_ROOT = Path(__file__).resolve().parent.parent  
+SCHEMA_DIR = BACKEND_ROOT / "schema"  
+  
+# Map provider name → schema file  
+PROVIDER_SCHEMA = {  
+    "devin":  "AiResponseSchemaFile.json",  
+    "gemini": "AiResponseSchema.json",  
+} 
+
 router = APIRouter()
 
 TEMPLATES_DATA = Path("..") / "data" / "templates"
@@ -234,6 +243,19 @@ def _call_ai(prompt: str, model: str | None = None) -> dict:
         kwargs["model"] = model  
     return provider.call(prompt, **kwargs)
 
+def _get_provider_format() -> str | None:  
+    """Read the document format from the provider's schema file."""  
+    provider_name = os.environ.get("AI_PROVIDER", "devin")  
+    schema_file = PROVIDER_SCHEMA.get(provider_name)  
+    if not schema_file:  
+        return None  
+    schema_path = SCHEMA_DIR / schema_file  
+    if not schema_path.exists():  
+        return None  
+    schema = json.loads(schema_path.read_text())  
+    return schema.get("properties", {}).get("document", {}).get("format")
+
+
 @router.post("/generate")  
 def generate_template(  
     body: GenerateRequest,  
@@ -244,7 +266,8 @@ def generate_template(
     ai_result = _call_ai(body.prompt)  
     print(ai_result)  
   
-    fmt = ai_result.get("format")  # "url" | "base64" | None  
+    fmt = _get_provider_format()  # reads from schema file
+
     template_id = str(uuid.uuid4())  
     filename = f"{template_id}.docx"  
     upload_path = TEMPLATES_DATA / filename  

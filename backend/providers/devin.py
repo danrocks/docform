@@ -84,31 +84,20 @@ USER REQUEST:
         }  
   
     def _save_output(self, structured_output: dict) -> dict:  
-
-        print (f"Devin structured output: {structured_output}")
+        """Persist raw Devin response JSON to TEMPLATES_DATA for audit."""  
         shared_uuid = uuid.uuid4().hex[:8]  
-        json_str = json.dumps(structured_output)  
-  
+        json_str = json.dumps(structured_output, indent=2)  
+    
         try:  
-            from ..paths import TEMPLATES_DATA  
+            TEMPLATES_DATA   = TEMPLATES_DATA = Path(__file__).resolve().parent.parent.parent / "data" / "templates"
             TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)  
-            shared_filename = f"AiResponseSchema_{shared_uuid}_shared.json"  
-            (TEMPLATES_DATA / shared_filename).write_text(json_str, encoding="utf-8")  
-        except Exception:  
-            pass  
-  
-        try:  
-            from ..AiResponseSaver import AiResponseSaver  
-            saver = AiResponseSaver(backend_root=self.backend_root)  
-            saver.save_from_json_string(  
-                json_str, "schema/AiResponseSchema.json",  
-                output_rel="data/templates", stem="AiResponseSchema",  
-                file_id=shared_uuid,  
-            )  
-        except Exception:  
-            pass  
-  
-        return structured_output  
+            raw_filename = f"DevinResponse_{shared_uuid}.json"  
+            (TEMPLATES_DATA / raw_filename).write_text(json_str, encoding="utf-8")  
+            print(f"Devin raw response saved: {raw_filename}")  
+        except Exception as e:  
+            print(f"Warning: failed to save Devin raw response: {e}")  
+    
+        return structured_output
   
     def call(self, prompt: str, *, mode: str = "document", **kwargs) -> Dict[str, Any]:  
         """Sync fallback — runs the async implementation in an event loop."""  
