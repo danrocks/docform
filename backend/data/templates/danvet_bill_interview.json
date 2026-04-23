@@ -1,0 +1,47 @@
+{
+  "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
+  "schemaVersion": 1,
+  "id": "danvet_bill_interview",
+  "version": 1,
+  "title": "DanVet Bill",
+  "description": "Generate a bill for a DanVet veterinary client, capturing the billing date, customer, description of work, and amount to charge.",
+  "components": [
+    {
+      "type": "datetime",
+      "id": "bill_date",
+      "label": "Bill date",
+      "helpText": "Defaults to today. Change if back-dating or forward-dating the invoice.",
+      "required": true,
+      "defaultValue": "today",
+      "includeTime": false
+    },
+    {
+      "type": "string",
+      "id": "customer_name",
+      "label": "Customer name",
+      "helpText": "Full name of the customer being billed.",
+      "required": true,
+      "maxLength": 100
+    },
+    {
+      "type": "string",
+      "id": "work_description",
+      "label": "Description of work done",
+      "helpText": "Describe the veterinary services, treatments, medications and any other work performed.",
+      "required": true,
+      "multiline": true,
+      "maxLength": 2000
+    },
+    {
+      "type": "number",
+      "id": "price",
+      "label": "Price to charge",
+      "helpText": "Total amount to charge the customer, in GBP.",
+      "required": true,
+      "min": 0,
+      "step": 0.01,
+      "decimalPlaces": 2,
+      "prefix": "\u00a3"
+    }
+  ]
+}
