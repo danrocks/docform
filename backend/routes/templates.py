@@ -32,14 +32,14 @@ PROVIDER_SCHEMA = {
 
 router = APIRouter()
 
-TEMPLATES_DATA = Path("..") / "data" / "templates"
+TEMPLATES_DATA = Path("data/templates")
 TEMPLATES_UPLOAD = Path("uploads/templates")
 
 OPENAI_SYSTEM_PROMPT = _build_system_prompt()
 
 def read_templates() -> list:
     out = []
-    print("here")
+    print("in read_templates")
     print(TEMPLATES_DATA)
     for f in TEMPLATES_DATA.glob("*.json"):
         try:
