@@ -1,0 +1,16 @@
+{  
+  "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/TemplateMetaSchema.json",  
+  "schemaVersion": 1,  
+  "id": "danvet_bill",  
+  "name": "DanVet Bill",  
+  "description": "Generate a bill for a DanVet veterinary client, capturing the billing date, customer, description of work, and amount to charge.",  
+  "interviewFile": "danvet_bill_interview.json",  
+  "documentFile": "danvet_bill_template.docx",  
+  "originalFilename": "danvet_bill_template.docx",  
+  "active": true,  
+  "createdAt": "2026-04-23T21:10:01Z",  
+  "createdBy": "admin",  
+  "updatedAt": null,  
+  "submissionCount": 0,  
+  "generationMethod": "upload"  
+}

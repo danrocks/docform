@@ -37,19 +37,24 @@ TEMPLATES_UPLOAD = Path("uploads/templates")
 
 OPENAI_SYSTEM_PROMPT = _build_system_prompt()
 
-def read_templates() -> list:
-    out = []
-    print("in read_templates")
-    print(TEMPLATES_DATA)
-    for f in TEMPLATES_DATA.glob("*.json"):
-        try:
-            print(f"Debug: loading template... {f.name}")
-            out.append(json.loads(f.read_text()))
-        except Exception:
-            pass
-    print( out)
-    return sorted(out, key=lambda x: x.get("created_at", ""), reverse=True)
-
+def read_templates() -> list:  
+    out = []  
+    for f in TEMPLATES_DATA.glob("*_meta.json"):  
+        try:  
+            meta = json.loads(f.read_text())  
+            # Load associated interview  
+            interview_path = TEMPLATES_DATA / meta.get("interviewFile", "")  
+            if interview_path.exists():  
+                interview = json.loads(interview_path.read_text())  
+                meta["fields"] = interview.get("components", [])  
+                meta["rules"] = interview.get("rules", [])  
+            else:  
+                meta["fields"] = []  
+                meta["rules"] = []  
+            out.append(meta)  
+        except Exception:  
+            pass  
+    return sorted(out, key=lambda x: x.get("createdAt", x.get("created_at", "")), reverse=True)
 
 def extract_placeholders_from_docx(path: Path) -> List[str]:
     """Extract {{placeholder}} tags from a docx file."""
@@ -85,7 +90,7 @@ def list_templates(current_user: dict = Depends(get_current_user)):
 
 @router.get("/{template_id}")
 def get_template(template_id: str, current_user: dict = Depends(get_current_user)):
-    path = TEMPLATES_DATA / f"{template_id}.json"
+    path = TEMPLATES_DATA / f"{template_id}_meta.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
     return json.loads(path.read_text())

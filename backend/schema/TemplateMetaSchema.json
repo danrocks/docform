@@ -1,0 +1,24 @@
+{  
+  "$schema": "https://json-schema.org/draft/2019-09/schema",  
+  "title": "Template Metadata",  
+  "type": "object",  
+  "required": ["id", "schemaVersion", "name", "interviewFile", "documentFile", "active", "createdAt", "createdBy"],  
+  "properties": {  
+    "$schema":          { "type": "string" },  
+    "schemaVersion":    { "type": "integer", "minimum": 1 },  
+    "id":               { "type": "string" },  
+    "name":             { "type": "string" },  
+    "description":      { "type": "string", "default": "" },  
+    "interviewFile":    { "type": "string", "description": "Filename of the InterviewSchema JSON file, relative to the same directory" },  
+    "documentFile":     { "type": "string", "description": "Filename of the .docx template file, relative to the same directory" },  
+    "originalFilename": { "type": "string", "description": "Original uploaded filename" },  
+    "active":           { "type": "boolean", "default": true },  
+    "createdAt":        { "type": "string", "format": "date-time" },  
+    "createdBy":        { "type": "string" },  
+    "updatedAt":        { "type": ["string", "null"], "format": "date-time" },  
+    "submissionCount":  { "type": "integer", "minimum": 0, "default": 0 },  
+    "generationMethod": { "enum": ["upload", "ai"] },  
+    "originalPrompt":   { "type": "string", "description": "Only present for AI-generated templates" }  
+  },  
+  "additionalProperties": false  
+}
