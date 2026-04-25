@@ -4,7 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from auth_utils import verify_password, create_access_token, get_users, get_current_user
+from auth_utils import verify_password, create_access_token, get_current_user
+from repositories.factory import get_user_repository
 
 router = APIRouter()
 
@@ -17,8 +18,8 @@ class LoginResponse(BaseModel):
 
 @router.post("/login", response_model=LoginResponse)
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    users = get_users()
-    user = next((u for u in users if u["username"] == form_data.username), None)
+    repo = get_user_repository()
+    user = repo.get_by_username(form_data.username)
     if not user or not verify_password(form_data.password, user["password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

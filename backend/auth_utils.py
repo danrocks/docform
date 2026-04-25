@@ -1,10 +1,9 @@
 import bcrypt
-import json
-from pathlib import Path
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from repositories.factory import get_user_repository
 
 SECRET_KEY = "docform-secret-key-change-in-production"
 ALGORITHM = "HS256"
@@ -28,13 +27,6 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_users() -> list:
-    path = Path("data/users.json")
-    if not path.exists():
-        return []
-    return json.loads(path.read_text())
-
-
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -49,8 +41,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     except JWTError:
         raise credentials_exception
 
-    users = get_users()
-    user = next((u for u in users if u["id"] == user_id), None)
+    user = get_user_repository().get_by_id(user_id)
     if user is None:
         raise credentials_exception
     return user

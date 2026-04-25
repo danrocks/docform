@@ -9,7 +9,8 @@ from config import settings
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
-from routes import auth, templates, submissions
+from routes import auth, templates, submissions, users
+from repositories.factory import get_user_repository
 
 DATA_DIRS = [
     "data/templates",
@@ -24,15 +25,16 @@ for _d in DATA_DIRS:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    users_file = Path("data/users.json")
-    if not users_file.exists():
+    if settings.STORAGE_BACKEND != "json":
+        from repositories.db_repo import create_tables
+        create_tables()
+
+    repo = get_user_repository()
+    if repo.count() == 0:
         from auth_utils import hash_password
-        default_users = [
-            {"id": "1", "username": "admin",    "password": hash_password("admin123"),    "role": "admin",    "name": "Admin User"},
-            {"id": "2", "username": "staff",    "password": hash_password("staff123"),    "role": "staff",    "name": "Staff User"},
-            {"id": "3", "username": "approver", "password": hash_password("approver123"), "role": "approver", "name": "Approver User"},
-        ]
-        users_file.write_text(json.dumps(default_users, indent=2))
+        repo.create({"id": "1", "username": "admin", "password": hash_password("admin123"), "role": "admin", "name": "Admin User"})
+        repo.create({"id": "2", "username": "staff", "password": hash_password("staff123"), "role": "staff", "name": "Staff User"})
+        repo.create({"id": "3", "username": "approver", "password": hash_password("approver123"), "role": "approver", "name": "Approver User"})
     yield
 
 app = FastAPI(title="DocForm API", lifespan=lifespan)
@@ -48,6 +50,7 @@ app.add_middleware(
 app.include_router(auth.router,        prefix="/api/auth",        tags=["auth"])
 app.include_router(templates.router,   prefix="/api/templates",   tags=["templates"])
 app.include_router(submissions.router, prefix="/api/submissions",  tags=["submissions"])
+app.include_router(users.router,       prefix="/api/users",       tags=["users"])
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
