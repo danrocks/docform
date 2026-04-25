@@ -67,14 +67,20 @@ def create_submission(
     body: SubmissionCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    tpl_path = TEMPLATES_DATA / f"{body.template_id}.json"
+    tpl_path = TEMPLATES_DATA / f"{body.template_id}_meta.json"
     if not tpl_path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
-    template = json.loads(tpl_path.read_text())
+    meta = json.loads(tpl_path.read_text())
 
-    # Validate submission data against question configs
+    interview_path = TEMPLATES_DATA / meta.get("interviewFile", "")
+    if not interview_path.exists():
+        raise HTTPException(status_code=500, detail="Template interview file not found")
+    interview = json.loads(interview_path.read_text())
+    fields = interview.get("components", [])
+
+    # Validate submission data against interview components
     try:
-        validated_data = validate_submission_data(template.get("fields", []), body.data)
+        validated_data = validate_submission_data(fields, body.data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -84,7 +90,7 @@ def create_submission(
     submission = {
         "id": submission_id,
         "template_id": body.template_id,
-        "template_name": template["name"],
+        "template_name": meta["name"],
         "data": validated_data,
         "context": body.context,
         "status": "pending",
@@ -99,7 +105,7 @@ def create_submission(
 
     # Generate documents immediately
     try:
-        docx_out, pdf_out = generate_documents(template, submission)
+        docx_out, pdf_out = generate_documents(meta, submission)
         submission["docx_path"] = str(docx_out)
         submission["pdf_path"] = str(pdf_out) if pdf_out else None
         submission["status"] = "generated"
@@ -109,17 +115,20 @@ def create_submission(
 
     (SUBMISSIONS_DATA / f"{submission_id}.json").write_text(json.dumps(submission, indent=2))
 
-    # Increment submission count on template
-    template["submission_count"] = template.get("submission_count", 0) + 1
-    tpl_path.write_text(json.dumps(template, indent=2))
+    # Increment submission count on template meta
+    meta["submissionCount"] = meta.get("submissionCount", 0) + 1
+    tpl_path.write_text(json.dumps(meta, indent=2))
 
     return submission
 
 
 def generate_documents(template: dict, submission: dict):
-    """Fill the docx template and convert to PDF."""
+    """Fill the docx template and convert to PDF.
+
+    `template` is the template meta dict (uses `documentFile`).
+    """
     GENERATED.mkdir(parents=True, exist_ok=True)
-    src = TEMPLATES_DATA / template["stored_filename"]
+    src = TEMPLATES_DATA / template["documentFile"]
     if not src.exists():
         raise FileNotFoundError(f"Template file not found: {src}")
 
