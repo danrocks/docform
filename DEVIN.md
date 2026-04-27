@@ -1,6 +1,6 @@
 # Docform — Devin Context  
   
-> **Last verified**: 2026-04-09  
+> **Last verified**: 2026-04-25  
 >  
 > **Maintenance rule**: When any Devin session makes a structural or architectural change to this project (new storage backend, new modules, changed workflows, new concepts), update this file as part of that same task. Keep descriptions high-level — focus on *what* and *where*, not implementation detail.  
   
@@ -24,8 +24,9 @@ Docform is a system for the creation, use, and management of **document template
   - `auth.py` — JWT-based authentication (admin, staff, approver roles)  
   - `templates.py` — Template CRUD, upload, field configuration, AI generation  
   - `submissions.py` — Submission creation, document rendering, approval workflow  
+  - `users.py` — User CRUD (admin only) via repository abstraction  
 - **Frontend**: React SPA (Vite + Tailwind CSS) in `frontend/`  
-- **Storage**: Currently flat-file JSON in `data/` and binary files in `uploads/` — no external database (see Roadmap)  
+- **Storage**: PostgreSQL for user data (switchable to JSON via `STORAGE_BACKEND=json`). Templates and submissions remain as flat-file JSON in `data/` and binary files in `uploads/`.  
 - **AI Generation**: OpenAI and Google Gemini integration for generating templates and interviews from natural language prompts  
   
 ## Key Workflows  
@@ -39,7 +40,7 @@ Docform is a system for the creation, use, and management of **document template
   
 Planned architectural changes — not yet implemented:  
   
-- **Database persistence**: Replace flat-file JSON storage (`data/`) with a relational database. When this is implemented, update the "Storage" line in the Architecture section above and adjust any references to `data/` paths.  
+- **Database persistence**: Partially complete — user storage has been migrated to PostgreSQL with a repository abstraction (`backend/repositories/`). Templates and submissions still use flat-file JSON in `data/`.  
   
 - **Multi-tenancy**: Introduce a tenancy system so different groups of users are entirely isolated from each other (separate templates, interviews, answersets, and users per tenant). When this is implemented, add "Tenant" to the Core Concepts section above and describe the isolation model.  
   
@@ -47,4 +48,4 @@ Planned architectural changes — not yet implemented:
   
 - Interview schemas follow the format defined in `InterviewSchema.json`  
 - Templates use `{{placeholder}}` syntax in `.docx` files  
-- Default users (admin/staff/approver) are seeded on first startup if `data/users.json` doesn't exist
+- Default users (admin/staff/approver) are seeded on startup via the repository abstraction if no users exist

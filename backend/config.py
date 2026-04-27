@@ -12,5 +12,7 @@ class Settings(BaseSettings):
     ENV: str = "development"
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    STORAGE_BACKEND: str = "db"
+    DATABASE_URL: str = "postgresql://docform:docform@db:5432/docform"
 
 settings = Settings()

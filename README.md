@@ -13,13 +13,35 @@ A document form platform for generating filled Word (.docx) and PDF documents fr
 - **Generates PDF** if LibreOffice is installed on the server
 - **Role-based access** — Admin, Staff, Approver
 - **Approve / Reject workflow** with reason tracking
-- **File-based storage** — no database required
+- **PostgreSQL database** for user storage (JSON file backend also available via config)
 
 ---
 
 ## Quick Start
 
-### 1. Backend
+### Docker (recommended)
+
+```bash
+cp backend/.env.example backend/.env
+# Edit .env with your API keys
+docker compose up --build
+```
+
+This starts PostgreSQL, the backend API, and the frontend. The app is available at **http://localhost:3000**.
+
+### Manual Setup
+
+#### 1. Database
+
+Start a PostgreSQL instance (e.g. via Docker):
+
+```bash
+docker run -d --name docform-db -e POSTGRES_USER=docform -e POSTGRES_PASSWORD=docform -e POSTGRES_DB=docform -p 5432:5432 postgres:16-alpine
+```
+
+Alternatively, set `STORAGE_BACKEND=json` in `backend/.env` to skip the database requirement and use flat-file JSON storage instead.
+
+#### 2. Backend
 
 ```bash
 cd backend
@@ -32,7 +54,7 @@ uvicorn main:app --reload --port 8000
 Backend runs at **http://localhost:8000**
 API docs at **http://localhost:8000/docs**
 
-### 2. Frontend
+#### 3. Frontend
 
 ```bash
 cd frontend
@@ -52,7 +74,36 @@ Frontend runs at **http://localhost:3000**
 | `staff`    | `staff123`   | Staff    | Fill forms, download own docs       |
 | `approver` | `approver123`| Approver | View all, approve/reject            |
 
-Change these in `backend/data/users.json` after first run.
+Change these via the admin user management UI or API after first run.
+
+---
+
+## Configuration
+
+Key environment variables (set in `backend/.env`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STORAGE_BACKEND` | `db` | `"db"` for PostgreSQL, `"json"` for flat-file JSON |
+| `DATABASE_URL` | `postgresql://docform:docform@db:5432/docform` | PostgreSQL connection string (used when `STORAGE_BACKEND=db`) |
+| `OPENAI_API_KEY` | — | OpenAI API key for AI template generation |
+| `GEMINI_KEY` | — | Google Gemini API key |
+| `DEVIN_KEY` | — | Devin API key |
+
+---
+
+## User Management
+
+Admins can manage users via the REST API:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/users` | List all users |
+| `POST` | `/api/users` | Create a new user |
+| `PUT` | `/api/users/{id}` | Update user fields |
+| `DELETE` | `/api/users/{id}` | Delete a user |
+
+All endpoints require admin authentication (Bearer token).
 
 ---
 
@@ -93,26 +144,37 @@ If LibreOffice is not installed, `.docx` download still works. The PDF button wi
 
 ```
 docform/
+├── docker-compose.yml          # Orchestrates db, backend, frontend services
 ├── backend/
-│   ├── main.py              # FastAPI app entry point
-│   ├── auth_utils.py        # JWT auth, password hashing, role guards
+│   ├── main.py                 # FastAPI app entry point
+│   ├── auth_utils.py           # JWT auth, password hashing, role guards
+│   ├── config.py               # Pydantic settings (env vars)
+│   ├── models.py               # SQLAlchemy ORM models
 │   ├── requirements.txt
+│   ├── alembic/                # Database migrations
+│   │   ├── env.py
+│   │   └── versions/
+│   ├── repositories/           # User storage abstraction
+│   │   ├── base.py             # Abstract UserRepository
+│   │   ├── json_repo.py        # JSON file implementation
+│   │   ├── db_repo.py          # PostgreSQL implementation
+│   │   └── factory.py          # Factory to select backend
 │   ├── routes/
-│   │   ├── auth.py          # Login, /me
-│   │   ├── templates.py     # Upload, list, edit, delete templates
-│   │   └── submissions.py   # Create, list, approve, download
+│   │   ├── auth.py             # Login, /me
+│   │   ├── templates.py        # Upload, list, edit, delete templates
+│   │   ├── submissions.py      # Create, list, approve, download
+│   │   └── users.py            # User CRUD (admin only)
 │   ├── data/
-│   │   ├── users.json       # User accounts (auto-created)
-│   │   ├── templates/       # Template metadata JSON files
-│   │   └── submissions/     # Submission JSON files
+│   │   ├── templates/          # Template metadata JSON files
+│   │   └── submissions/        # Submission JSON files
 │   └── uploads/
-│       ├── templates/       # Uploaded .docx template files
-│       └── generated/       # Generated .docx and .pdf outputs
+│       ├── templates/          # Uploaded .docx template files
+│       └── generated/          # Generated .docx and .pdf outputs
 │
 └── frontend/
     ├── src/
-    │   ├── App.jsx           # Routes
-    │   ├── api.js            # Axios instance
+    │   ├── App.jsx             # Routes
+    │   ├── api.js              # Axios instance
     │   ├── context/
     │   │   └── AuthContext.jsx
     │   ├── pages/
