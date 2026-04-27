@@ -4,8 +4,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from config import settings
-from models import Base, User
-from repositories.base import UserRepository
+from models import Base, Role, User
+from repositories.base import RoleRepository, UserRepository
 
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -58,6 +58,38 @@ class DbUserRepository(UserRepository):
     def count(self) -> int:
         with SessionLocal() as session:
             return session.query(User).count()
+
+
+class DbRoleRepository(RoleRepository):
+    def get_all(self) -> list[dict]:
+        with SessionLocal() as session:
+            return [r.to_dict() for r in session.query(Role).all()]
+
+    def get_by_name(self, name: str) -> Optional[dict]:
+        with SessionLocal() as session:
+            role = session.get(Role, name)
+            return role.to_dict() if role else None
+
+    def create(self, role: dict) -> dict:
+        with SessionLocal() as session:
+            db_role = Role(**role)
+            session.add(db_role)
+            session.commit()
+            session.refresh(db_role)
+            return db_role.to_dict()
+
+    def delete(self, name: str) -> bool:
+        with SessionLocal() as session:
+            role = session.get(Role, name)
+            if not role:
+                return False
+            session.delete(role)
+            session.commit()
+            return True
+
+    def count(self) -> int:
+        with SessionLocal() as session:
+            return session.query(Role).count()
 
 
 def create_tables() -> None:

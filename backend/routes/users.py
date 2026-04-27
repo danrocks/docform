@@ -6,7 +6,17 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from typing import Optional
 from auth_utils import require_role, hash_password
-from repositories.factory import get_user_repository
+from repositories.factory import get_role_repository, get_user_repository
+
+
+def validate_role(role: str) -> None:
+    role_repo = get_role_repository()
+    if not role_repo.get_by_name(role):
+        valid = [r["name"] for r in role_repo.get_all()]
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid role '{role}'. Valid roles: {valid}",
+        )
 
 router = APIRouter()
 
@@ -34,6 +44,7 @@ def list_users(current_user: dict = Depends(require_role("admin"))):
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_user(body: UserCreate, current_user: dict = Depends(require_role("admin"))):
+    validate_role(body.role)
     repo = get_user_repository()
     if repo.get_by_username(body.username):
         raise HTTPException(
@@ -59,6 +70,8 @@ def update_user(user_id: str, body: UserUpdate, current_user: dict = Depends(req
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     data = body.model_dump(exclude_none=True)
+    if "role" in data:
+        validate_role(data["role"])
     if "password" in data:
         data["password"] = hash_password(data["password"])
 
