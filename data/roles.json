@@ -1,0 +1,5 @@
+[
+  {"name": "admin", "description": "Administrator"},
+  {"name": "staff", "description": "Staff member"},
+  {"name": "approver", "description": "Approver"}
+]

@@ -21,3 +21,13 @@ class User(Base):
             "role": self.role,
             "name": self.name,
         }
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    name = Column(String, primary_key=True)
+    description = Column(String, nullable=False, default="")
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "description": self.description}

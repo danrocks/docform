@@ -1,5 +1,5 @@
 from config import settings
-from repositories.base import UserRepository
+from repositories.base import RoleRepository, UserRepository
 
 
 def get_user_repository() -> UserRepository:
@@ -9,3 +9,12 @@ def get_user_repository() -> UserRepository:
     else:
         from repositories.db_repo import DbUserRepository
         return DbUserRepository()
+
+
+def get_role_repository() -> RoleRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonRoleRepository
+        return JsonRoleRepository()
+    else:
+        from repositories.db_repo import DbRoleRepository
+        return DbRoleRepository()

@@ -2,9 +2,10 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from repositories.base import UserRepository
+from repositories.base import RoleRepository, UserRepository
 
 USERS_FILE = Path("data/users.json")
+ROLES_FILE = Path("data/roles.json")
 
 
 class JsonUserRepository(UserRepository):
@@ -47,6 +48,40 @@ class JsonUserRepository(UserRepository):
         if len(new_users) == len(users):
             return False
         self._write(new_users)
+        return True
+
+    def count(self) -> int:
+        return len(self._read())
+
+
+class JsonRoleRepository(RoleRepository):
+    def _read(self) -> list[dict]:
+        if not ROLES_FILE.exists():
+            return []
+        return json.loads(ROLES_FILE.read_text())
+
+    def _write(self, roles: list[dict]) -> None:
+        ROLES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        ROLES_FILE.write_text(json.dumps(roles, indent=2))
+
+    def get_all(self) -> list[dict]:
+        return self._read()
+
+    def get_by_name(self, name: str) -> Optional[dict]:
+        return next((r for r in self._read() if r["name"] == name), None)
+
+    def create(self, role: dict) -> dict:
+        roles = self._read()
+        roles.append(role)
+        self._write(roles)
+        return role
+
+    def delete(self, name: str) -> bool:
+        roles = self._read()
+        new_roles = [r for r in roles if r["name"] != name]
+        if len(new_roles) == len(roles):
+            return False
+        self._write(new_roles)
         return True
 
     def count(self) -> int:

@@ -9,8 +9,8 @@ from config import settings
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
-from routes import auth, templates, submissions, users
-from repositories.factory import get_user_repository
+from routes import auth, templates, submissions, users, roles
+from repositories.factory import get_role_repository, get_user_repository
 
 DATA_DIRS = [
     "data/templates",
@@ -28,6 +28,12 @@ async def lifespan(app: FastAPI):
     if settings.STORAGE_BACKEND != "json":
         from repositories.db_repo import create_tables
         create_tables()
+
+    role_repo = get_role_repository()
+    if role_repo.count() == 0:
+        role_repo.create({"name": "admin", "description": "Administrator"})
+        role_repo.create({"name": "staff", "description": "Staff member"})
+        role_repo.create({"name": "approver", "description": "Approver"})
 
     repo = get_user_repository()
     if repo.count() == 0:
@@ -51,6 +57,7 @@ app.include_router(auth.router,        prefix="/api/auth",        tags=["auth"])
 app.include_router(templates.router,   prefix="/api/templates",   tags=["templates"])
 app.include_router(submissions.router, prefix="/api/submissions",  tags=["submissions"])
 app.include_router(users.router,       prefix="/api/users",       tags=["users"])
+app.include_router(roles.router,       prefix="/api/roles",       tags=["roles"])
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
