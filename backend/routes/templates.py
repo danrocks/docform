@@ -59,8 +59,10 @@ def read_templates() -> list:
     out = []
     for f in TEMPLATES_DATA.glob("*_meta.json"):
         try:
+            print("getting templates from", f )
             out.append(_load_template_with_interview(f))
         except Exception:
+            print(f"Failed to load template meta from {f}", file=sys.stderr)
             pass
     return sorted(out, key=lambda x: x.get("createdAt", x.get("created_at", "")), reverse=True)
 
@@ -88,8 +90,11 @@ def ai_status(current_user: dict = Depends(get_current_user)):
     except Exception:  
         return {"available": False}
 
+
 @router.get("/")
 def list_templates(current_user: dict = Depends(get_current_user)):
+    logging.info(f"list_templates called, TEMPLATES_DATA={TEMPLATES_DATA.resolve()}")  
+    print("Listing templates for user", current_user["username"])
     templates = read_templates()
     if current_user["role"] == "staff":
         templates = [t for t in templates if t.get("active", True)]
