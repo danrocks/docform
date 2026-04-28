@@ -32,7 +32,9 @@ PROVIDER_SCHEMA = {
 
 router = APIRouter()
 
-TEMPLATES_DATA = Path("data/templates")
+# TEMPLATES_DATA = Path("data/templates")
+TEMPLATES_DATA = BACKEND_ROOT / "data" / "templates"  
+
 TEMPLATES_UPLOAD = Path("uploads/templates")
 
 OPENAI_SYSTEM_PROMPT = _build_system_prompt()
@@ -66,6 +68,7 @@ def read_templates() -> list:
             pass
     return sorted(out, key=lambda x: x.get("createdAt", x.get("created_at", "")), reverse=True)
 
+
 def extract_placeholders_from_docx(path: Path) -> List[str]:
     """Extract {{placeholder}} tags from a docx file."""
     placeholders = set()
@@ -92,17 +95,18 @@ def ai_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/")
-def list_templates(current_user: dict = Depends(get_current_user)):
+def list_templates():
     logging.info(f"list_templates called, TEMPLATES_DATA={TEMPLATES_DATA.resolve()}")  
-    print("Listing templates for user", current_user["username"])
+    # print("Listing templates for user", current_user["username"])
     templates = read_templates()
-    if current_user["role"] == "staff":
-        templates = [t for t in templates if t.get("active", True)]
+    #if current_user["role"] == "staff":
+     #   templates = [t for t in templates if t.get("active", True)]
     return templates
 
 
 @router.get("/{template_id}")
 def get_template(template_id: str, current_user: dict = Depends(get_current_user)):
+    logging.info(f"get_template called with id={template_id}")
     path = TEMPLATES_DATA / f"{template_id}_meta.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")

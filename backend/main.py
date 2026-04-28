@@ -12,13 +12,20 @@ OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 from routes import auth, templates, submissions, users, roles
 from repositories.factory import get_role_repository, get_user_repository
 
-DATA_DIRS = [
-    "data/templates",
-    "data/submissions",
-    "uploads/templates",
-    "uploads/generated",
-]
+BACKEND_ROOT = Path(__file__).resolve().parent
 
+# DATA_DIRS = [
+#     "data/templates",
+#     "data/submissions",
+#     "uploads/templates",
+#     "uploads/generated",
+# ]
+DATA_DIRS = [  
+    BACKEND_ROOT / "data" / "templates",  
+    BACKEND_ROOT / "data" / "submissions",  
+    BACKEND_ROOT / "uploads" / "templates",  
+    BACKEND_ROOT / "uploads" / "generated",  
+]
 # Create directories eagerly at import time so StaticFiles mount doesn't crash
 for _d in DATA_DIRS:
     Path(_d).mkdir(parents=True, exist_ok=True)
