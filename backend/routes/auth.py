@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from auth_utils import verify_password, create_access_token, get_current_user
+from auth_utils import verify_password, create_access_token, get_current_user, hash_password
 from repositories.factory import get_user_repository
 
 router = APIRouter()
@@ -33,3 +33,20 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
     return {k: v for k, v in current_user.items() if k != "password"}
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.put("/me/password")
+def change_password(body: PasswordChange, current_user: dict = Depends(get_current_user)):
+    if not verify_password(body.current_password, current_user["password"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    repo = get_user_repository()
+    repo.update(current_user["id"], {"password": hash_password(body.new_password)})
+    return {"detail": "Password updated successfully"}
