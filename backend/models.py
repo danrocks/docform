@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String
+from sqlalchemy import Column, String, ForeignKey
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -10,7 +10,7 @@ class User(Base):
     id = Column(String, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
-    role = Column(String, nullable=False)
+    role = Column(String, ForeignKey("roles.name"), nullable=False)
     name = Column(String, nullable=False)
 
     def to_dict(self) -> dict:
