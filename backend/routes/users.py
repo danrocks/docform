@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import uuid
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 from auth_utils import require_role, hash_password
@@ -36,10 +36,29 @@ class UserUpdate(BaseModel):
 
 
 @router.get("")
-def list_users(current_user: dict = Depends(require_role("admin"))):
+def list_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(require_role("admin")),
+):
     repo = get_user_repository()
     users = repo.get_all()
-    return [{k: v for k, v in u.items() if k != "password"} for u in users]
+    paginated = users[skip : skip + limit]
+    return {
+        "users": [{k: v for k, v in u.items() if k != "password"} for u in paginated],
+        "total": len(users),
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/{user_id}")
+def get_user(user_id: str, current_user: dict = Depends(require_role("admin"))):
+    repo = get_user_repository()
+    user = repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return {k: v for k, v in user.items() if k != "password"}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -70,6 +89,18 @@ def update_user(user_id: str, body: UserUpdate, current_user: dict = Depends(req
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     data = body.model_dump(exclude_none=True)
+    if user_id == current_user["id"] and "role" in data and data["role"] != current_user["role"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot change your own role",
+        )
+    if "username" in data:
+        conflict = repo.get_by_username(data["username"])
+        if conflict and conflict["id"] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Username '{data['username']}' already exists",
+            )
     if "role" in data:
         validate_role(data["role"])
     if "password" in data:
@@ -81,6 +112,11 @@ def update_user(user_id: str, body: UserUpdate, current_user: dict = Depends(req
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(user_id: str, current_user: dict = Depends(require_role("admin"))):
+    if user_id == current_user["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete your own account",
+        )
     repo = get_user_repository()
     if not repo.delete(user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")

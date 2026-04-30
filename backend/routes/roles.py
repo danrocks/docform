@@ -3,6 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
+from typing import Optional
 from auth_utils import require_role, get_current_user
 from repositories.factory import get_role_repository, get_user_repository
 
@@ -43,3 +44,20 @@ def delete_role(name: str, current_user: dict = Depends(require_role("admin"))):
         )
     if not repo.delete(name):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+
+
+class RoleUpdate(BaseModel):
+    description: Optional[str] = None
+
+
+@router.put("/{name}")
+def update_role(name: str, body: RoleUpdate, current_user: dict = Depends(require_role("admin"))):
+    repo = get_role_repository()
+    existing = repo.get_by_name(name)
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    data = body.model_dump(exclude_none=True)
+    if not data:
+        return existing
+    updated = repo.update(name, data)
+    return updated

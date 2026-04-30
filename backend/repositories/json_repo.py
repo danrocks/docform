@@ -76,6 +76,15 @@ class JsonRoleRepository(RoleRepository):
         self._write(roles)
         return role
 
+    def update(self, name: str, data: dict) -> Optional[dict]:
+        roles = self._read()
+        for i, r in enumerate(roles):
+            if r["name"] == name:
+                roles[i].update(data)
+                self._write(roles)
+                return roles[i]
+        return None
+
     def delete(self, name: str) -> bool:
         roles = self._read()
         new_roles = [r for r in roles if r["name"] != name]

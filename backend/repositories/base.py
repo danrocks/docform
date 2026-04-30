@@ -36,6 +36,9 @@ class RoleRepository(ABC):
     def create(self, role: dict) -> dict: ...
 
     @abstractmethod
+    def update(self, name: str, data: dict) -> Optional[dict]: ...
+
+    @abstractmethod
     def delete(self, name: str) -> bool: ...
 
     @abstractmethod

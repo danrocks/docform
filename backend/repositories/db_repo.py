@@ -78,6 +78,17 @@ class DbRoleRepository(RoleRepository):
             session.refresh(db_role)
             return db_role.to_dict()
 
+    def update(self, name: str, data: dict) -> Optional[dict]:
+        with SessionLocal() as session:
+            role = session.get(Role, name)
+            if not role:
+                return None
+            for key, value in data.items():
+                setattr(role, key, value)
+            session.commit()
+            session.refresh(role)
+            return role.to_dict()
+
     def delete(self, name: str) -> bool:
         with SessionLocal() as session:
             role = session.get(Role, name)
