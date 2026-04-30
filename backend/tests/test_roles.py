@@ -125,7 +125,7 @@ class TestUserRoleValidation:
     def test_create_user_invalid_role(self, client, admin_token):
         resp = client.post(
             "/api/users",
-            json={"username": "newuser", "password": "pw", "role": "bogus", "name": "X"},
+            json={"username": "newuser", "password": "password1", "role": "bogus", "name": "X"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 422
@@ -134,7 +134,7 @@ class TestUserRoleValidation:
     def test_create_user_valid_role(self, client, admin_token):
         resp = client.post(
             "/api/users",
-            json={"username": "newuser", "password": "pw", "role": "staff", "name": "X"},
+            json={"username": "newuser", "password": "password1", "role": "staff", "name": "X"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 201
@@ -144,7 +144,7 @@ class TestUserRoleValidation:
         user_repo.create({
             "id": "u-upd",
             "username": "updateme",
-            "password": hash_password("pw"),
+            "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
         })
@@ -161,7 +161,7 @@ class TestUserRoleValidation:
         user_repo.create({
             "id": "u-upd2",
             "username": "updateme2",
-            "password": hash_password("pw"),
+            "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
         })
@@ -178,7 +178,7 @@ class TestUserRoleValidation:
         user_repo.create({
             "id": "u-upd3",
             "username": "updateme3",
-            "password": hash_password("pw"),
+            "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
         })

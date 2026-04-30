@@ -6,6 +6,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8"
     )
 
+    MIN_PASSWORD_LENGTH: int = 8
     OPENAI_API_KEY: str
     GEMINI_KEY: str
     DEVIN_KEY: str
