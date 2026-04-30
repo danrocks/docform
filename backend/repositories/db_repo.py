@@ -61,7 +61,7 @@ class DbUserRepository(UserRepository):
 
     def get_paginated(self, skip: int = 0, limit: int = 20) -> list[dict]:
         with SessionLocal() as session:
-            users = session.query(User).offset(skip).limit(limit).all()
+            users = session.query(User).order_by(User.username).offset(skip).limit(limit).all()
             return [u.to_dict() for u in users]
 
 
