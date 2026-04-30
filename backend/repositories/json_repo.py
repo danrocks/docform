@@ -53,6 +53,10 @@ class JsonUserRepository(UserRepository):
     def count(self) -> int:
         return len(self._read())
 
+    def get_paginated(self, skip: int = 0, limit: int = 20) -> list[dict]:
+        users = self._read()
+        return users[skip:skip + limit]
+
 
 class JsonRoleRepository(RoleRepository):
     def _read(self) -> list[dict]:

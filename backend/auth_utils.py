@@ -1,3 +1,5 @@
+import uuid
+
 import bcrypt
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
@@ -11,6 +13,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
+# TODO: Replace with Redis for persistence across restarts
+_revoked_jtis: set[str] = set()
+
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -22,6 +27,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
+    to_encode["jti"] = str(uuid.uuid4())
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode["exp"] = expire
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -36,7 +42,10 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
+        jti: str = payload.get("jti")
         if user_id is None:
+            raise credentials_exception
+        if jti and jti in _revoked_jtis:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
@@ -45,6 +54,14 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     if user is None:
         raise credentials_exception
     return user
+
+
+def revoke_token(jti: str) -> None:
+    _revoked_jtis.add(jti)
+
+
+def is_token_revoked(jti: str) -> bool:
+    return jti in _revoked_jtis
 
 
 def require_role(*roles: str):

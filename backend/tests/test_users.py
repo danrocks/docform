@@ -28,7 +28,7 @@ class TestListUsers:
             user_repo.create({
                 "id": f"pag-user-{i}",
                 "username": f"paguser{i}",
-                "password": hash_password("pw"),
+                "password": hash_password("password1"),
                 "role": "staff",
                 "name": f"Pag User {i}",
             })
@@ -51,7 +51,7 @@ class TestGetUser:
         user_repo.create({
             "id": "get-user-1",
             "username": "getme",
-            "password": hash_password("pw"),
+            "password": hash_password("password1"),
             "role": "staff",
             "name": "Get Me",
         })
@@ -85,7 +85,7 @@ class TestCreateUser:
     def test_create_user(self, client, admin_token):
         resp = client.post(
             "/api/users",
-            json={"username": "newcreated", "password": "pw", "role": "staff", "name": "New User"},
+            json={"username": "newcreated", "password": "password1", "role": "staff", "name": "New User"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 201
@@ -96,12 +96,12 @@ class TestCreateUser:
     def test_create_user_duplicate_username(self, client, admin_token):
         client.post(
             "/api/users",
-            json={"username": "dupuser", "password": "pw", "role": "staff", "name": "Dup"},
+            json={"username": "dupuser", "password": "password1", "role": "staff", "name": "Dup"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         resp = client.post(
             "/api/users",
-            json={"username": "dupuser", "password": "pw", "role": "staff", "name": "Dup2"},
+            json={"username": "dupuser", "password": "password1", "role": "staff", "name": "Dup2"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 409
@@ -109,7 +109,7 @@ class TestCreateUser:
     def test_create_user_as_staff_forbidden(self, client, staff_token):
         resp = client.post(
             "/api/users",
-            json={"username": "staffcreated", "password": "pw", "role": "staff", "name": "X"},
+            json={"username": "staffcreated", "password": "password1", "role": "staff", "name": "X"},
             headers={"Authorization": f"Bearer {staff_token}"},
         )
         assert resp.status_code == 403
@@ -122,7 +122,7 @@ class TestUpdateUser:
         user_repo.create({
             "id": user_id,
             "username": username,
-            "password": hash_password("pw"),
+            "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Target",
         })
@@ -141,14 +141,14 @@ class TestUpdateUser:
         self._create_test_user(user_repo, user_id="upd-pw-1", username="updpwuser")
         resp = client.put(
             "/api/users/upd-pw-1",
-            json={"password": "newpass"},
+            json={"password": "newpass12"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 200
         # Verify login with new password
         login_resp = client.post(
             "/api/auth/login",
-            data={"username": "updpwuser", "password": "newpass"},
+            data={"username": "updpwuser", "password": "newpass12"},
         )
         assert login_resp.status_code == 200
 
@@ -188,7 +188,7 @@ class TestDeleteUser:
         user_repo.create({
             "id": "del-user-1",
             "username": "delme",
-            "password": hash_password("pw"),
+            "password": hash_password("password1"),
             "role": "staff",
             "name": "Del Me",
         })
@@ -225,7 +225,7 @@ class TestChangePassword:
     def test_change_own_password(self, client, admin_token):
         resp = client.put(
             "/api/auth/me/password",
-            json={"current_password": "pass123", "new_password": "newpass456"},
+            json={"current_password": "pass1234", "new_password": "newpass456"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 200
@@ -240,7 +240,7 @@ class TestChangePassword:
     def test_change_password_wrong_current(self, client, admin_token):
         resp = client.put(
             "/api/auth/me/password",
-            json={"current_password": "wrongpass", "new_password": "newpass"},
+            json={"current_password": "wrongpass", "new_password": "newpass12"},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 400
@@ -249,7 +249,7 @@ class TestChangePassword:
     def test_change_password_unauthenticated(self, client):
         resp = client.put(
             "/api/auth/me/password",
-            json={"current_password": "pw", "new_password": "newpw"},
+            json={"current_password": "password1", "new_password": "newpass12"},
         )
         assert resp.status_code == 401
 
@@ -280,3 +280,291 @@ class TestUpdateRole:
             headers={"Authorization": f"Bearer {staff_token}"},
         )
         assert resp.status_code == 403
+
+
+# --- Point 2: Password strength validation ---
+
+class TestPasswordValidation:
+    def test_create_user_short_password(self, client, admin_token):
+        resp = client.post(
+            "/api/users",
+            json={"username": "shortpw", "password": "abc", "role": "staff", "name": "X"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_update_user_short_password(self, client, admin_token, user_repo):
+        from auth_utils import hash_password
+        user_repo.create({
+            "id": "pw-val-1",
+            "username": "pwvaluser",
+            "password": hash_password("password1"),
+            "role": "staff",
+            "name": "PW Val",
+        })
+        resp = client.put(
+            "/api/users/pw-val-1",
+            json={"password": "short"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_change_own_password_short_new(self, client, admin_token):
+        resp = client.put(
+            "/api/auth/me/password",
+            json={"current_password": "pass1234", "new_password": "short"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_configurable_min_length(self, client, admin_token, monkeypatch):
+        from config import settings
+        monkeypatch.setattr(settings, "MIN_PASSWORD_LENGTH", 12)
+        resp = client.post(
+            "/api/users",
+            json={"username": "minlen12", "password": "eightchr", "role": "staff", "name": "X"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+
+# --- Point 3: Username format validation ---
+
+class TestUsernameValidation:
+    def test_create_user_short_username(self, client, admin_token):
+        resp = client.post(
+            "/api/users",
+            json={"username": "ab", "password": "password1", "role": "staff", "name": "X"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_create_user_spaces_in_username(self, client, admin_token):
+        resp = client.post(
+            "/api/users",
+            json={"username": "bad user", "password": "password1", "role": "staff", "name": "X"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_create_user_special_chars_username(self, client, admin_token):
+        resp = client.post(
+            "/api/users",
+            json={"username": "bad@!#", "password": "password1", "role": "staff", "name": "X"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_create_user_valid_username(self, client, admin_token):
+        resp = client.post(
+            "/api/users",
+            json={"username": "valid-user_1", "password": "password1", "role": "staff", "name": "Valid"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 201
+
+
+# --- Point 4: Rate limiting ---
+
+class TestRateLimit:
+    def test_fifth_failed_login_still_allowed(self, client, user_repo):
+        from auth_utils import hash_password
+        import rate_limit
+        rate_limit._attempts.clear()
+
+        user_repo.create({
+            "id": "rate-user-1",
+            "username": "rateuser",
+            "password": hash_password("password1"),
+            "role": "staff",
+            "name": "Rate User",
+        })
+        for _ in range(5):
+            resp = client.post("/api/auth/login", data={"username": "rateuser", "password": "wrong1234"})
+            assert resp.status_code == 401
+
+    def test_sixth_failed_login_blocked(self, client, user_repo):
+        from auth_utils import hash_password
+        import rate_limit
+        rate_limit._attempts.clear()
+
+        user_repo.create({
+            "id": "rate-user-2",
+            "username": "rateuser2",
+            "password": hash_password("password1"),
+            "role": "staff",
+            "name": "Rate User 2",
+        })
+        for _ in range(5):
+            client.post("/api/auth/login", data={"username": "rateuser2", "password": "wrong1234"})
+
+        resp = client.post("/api/auth/login", data={"username": "rateuser2", "password": "wrong1234"})
+        assert resp.status_code == 429
+        assert "Retry-After" in resp.headers
+
+    def test_successful_login_resets_counter(self, client, user_repo):
+        from auth_utils import hash_password
+        import rate_limit
+        rate_limit._attempts.clear()
+
+        user_repo.create({
+            "id": "rate-user-3",
+            "username": "rateuser3",
+            "password": hash_password("password1"),
+            "role": "staff",
+            "name": "Rate User 3",
+        })
+        for _ in range(4):
+            client.post("/api/auth/login", data={"username": "rateuser3", "password": "wrong1234"})
+
+        resp = client.post("/api/auth/login", data={"username": "rateuser3", "password": "password1"})
+        assert resp.status_code == 200
+
+        # After reset, failures should count from zero again
+        for _ in range(5):
+            resp = client.post("/api/auth/login", data={"username": "rateuser3", "password": "wrong1234"})
+            assert resp.status_code == 401
+
+
+# --- Point 5: Token revocation / logout ---
+
+class TestLogout:
+    def test_logout_revokes_token(self, client, admin_token):
+        import auth_utils
+        auth_utils._revoked_jtis.clear()
+
+        resp = client.post(
+            "/api/auth/logout",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["detail"] == "Logged out successfully"
+
+        # Using the same token on a protected endpoint should fail
+        resp = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 401
+
+    def test_logout_without_auth(self, client):
+        resp = client.post("/api/auth/logout")
+        assert resp.status_code == 401
+
+
+# --- Point 7: Public user info ---
+
+class TestPublicUserInfo:
+    def test_staff_can_view_public_info(self, client, staff_token, user_repo):
+        from auth_utils import hash_password
+        user_repo.create({
+            "id": "pub-user-1",
+            "username": "pubuser",
+            "password": hash_password("password1"),
+            "role": "staff",
+            "name": "Public User",
+        })
+        resp = client.get(
+            "/api/users/pub-user-1/public",
+            headers={"Authorization": f"Bearer {staff_token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"id": "pub-user-1", "name": "Public User", "role": "staff"}
+        assert "username" not in data
+        assert "password" not in data
+
+    def test_staff_cannot_view_full_user(self, client, staff_token):
+        resp = client.get(
+            "/api/users/test-admin-1",
+            headers={"Authorization": f"Bearer {staff_token}"},
+        )
+        assert resp.status_code == 403
+
+    def test_admin_can_view_full_user(self, client, admin_token, user_repo):
+        from auth_utils import hash_password
+        user_repo.create({
+            "id": "full-user-1",
+            "username": "fulluser",
+            "password": hash_password("password1"),
+            "role": "staff",
+            "name": "Full User",
+        })
+        resp = client.get(
+            "/api/users/full-user-1",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == "full-user-1"
+        assert data["username"] == "fulluser"
+        assert "password" not in data
+
+    def test_public_user_not_found(self, client, staff_token):
+        resp = client.get(
+            "/api/users/nonexistent/public",
+            headers={"Authorization": f"Bearer {staff_token}"},
+        )
+        assert resp.status_code == 404
+
+    def test_public_user_unauthenticated(self, client):
+        resp = client.get("/api/users/test-admin-1/public")
+        assert resp.status_code == 401
+
+
+# --- Point 8: Pagination ---
+
+class TestPaginationExtended:
+    def test_pagination_skip_limit(self, client, admin_token, user_repo):
+        from auth_utils import hash_password
+        for i in range(5):
+            user_repo.create({
+                "id": f"pag2-user-{i}",
+                "username": f"pag2user{i}",
+                "password": hash_password("password1"),
+                "role": "staff",
+                "name": f"Pag2 User {i}",
+            })
+        resp = client.get(
+            "/api/users?skip=1&limit=2",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["users"]) == 2
+        assert data["total"] >= 5
+        assert data["skip"] == 1
+        assert data["limit"] == 2
+
+    def test_pagination_negative_skip(self, client, admin_token):
+        resp = client.get(
+            "/api/users?skip=-1",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_pagination_zero_limit(self, client, admin_token):
+        resp = client.get(
+            "/api/users?limit=0",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_pagination_limit_too_high(self, client, admin_token):
+        resp = client.get(
+            "/api/users?limit=200",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 422
+
+    def test_pagination_defaults(self, client, admin_token):
+        resp = client.get(
+            "/api/users",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["skip"] == 0
+        assert data["limit"] == 20
+        assert "total" in data
+        assert isinstance(data["users"], list)

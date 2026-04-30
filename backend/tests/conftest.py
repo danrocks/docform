@@ -26,6 +26,12 @@ def tmp_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(jr, "ROLES_FILE", roles_file)
     monkeypatch.setattr(jr, "USERS_FILE", users_file)
 
+    import rate_limit
+    rate_limit._attempts.clear()
+
+    import auth_utils
+    auth_utils._revoked_jtis.clear()
+
     return tmp_path
 
 
@@ -63,11 +69,11 @@ def admin_token(client, user_repo):
     user_repo.create({
         "id": "test-admin-1",
         "username": "testadmin",
-        "password": hash_password("pass123"),
+        "password": hash_password("pass1234"),
         "role": "admin",
         "name": "Test Admin",
     })
-    resp = client.post("/api/auth/login", data={"username": "testadmin", "password": "pass123"})
+    resp = client.post("/api/auth/login", data={"username": "testadmin", "password": "pass1234"})
     return resp.json()["access_token"]
 
 
@@ -77,9 +83,9 @@ def staff_token(client, user_repo):
     user_repo.create({
         "id": "test-staff-1",
         "username": "teststaff",
-        "password": hash_password("pass123"),
+        "password": hash_password("pass1234"),
         "role": "staff",
         "name": "Test Staff",
     })
-    resp = client.post("/api/auth/login", data={"username": "teststaff", "password": "pass123"})
+    resp = client.post("/api/auth/login", data={"username": "teststaff", "password": "pass1234"})
     return resp.json()["access_token"]

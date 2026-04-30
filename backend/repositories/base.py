@@ -24,6 +24,9 @@ class UserRepository(ABC):
     @abstractmethod
     def count(self) -> int: ...
 
+    @abstractmethod
+    def get_paginated(self, skip: int = 0, limit: int = 20) -> list[dict]: ...
+
 
 class RoleRepository(ABC):
     @abstractmethod
