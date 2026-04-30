@@ -8,6 +8,9 @@ import TemplateEditPage from './pages/TemplateEditPage'
 import NewSubmissionPage from './pages/NewSubmissionPage'
 import SubmissionsPage from './pages/SubmissionsPage'
 import SubmissionDetailPage from './pages/SubmissionDetailPage'
+import UsersPage from './pages/UsersPage'
+import RolesPage from './pages/RolesPage'
+import ChangePasswordPage from './pages/ChangePasswordPage'
 
 function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth()
@@ -29,6 +32,9 @@ export default function App() {
           <Route path="submissions/new" element={<NewSubmissionPage />} />
           <Route path="submissions" element={<SubmissionsPage />} />
           <Route path="submissions/:id" element={<SubmissionDetailPage />} />
+          <Route path="users" element={<PrivateRoute roles={['admin']}><UsersPage /></PrivateRoute>} />
+          <Route path="roles" element={<PrivateRoute roles={['admin']}><RolesPage /></PrivateRoute>} />
+          <Route path="change-password" element={<ChangePasswordPage />} />
         </Route>
       </Routes>
     </AuthProvider>

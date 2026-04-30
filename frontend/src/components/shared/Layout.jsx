@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, FileText, FilePlus, ClipboardList,
-  LogOut, ChevronRight, User
+  LogOut, ChevronRight, User, Users, Shield, KeyRound
 } from 'lucide-react'
 
 const navItems = [
@@ -10,6 +10,8 @@ const navItems = [
   { to: '/templates',    label: 'Templates',   icon: FileText,        roles: ['admin'] },
   { to: '/submissions/new', label: 'New Form', icon: FilePlus,        roles: ['admin','staff'] },
   { to: '/submissions',  label: 'Submissions', icon: ClipboardList,   roles: ['admin','staff','approver'] },
+  { to: '/users',         label: 'Users',       icon: Users,           roles: ['admin'] },
+  { to: '/roles',         label: 'Roles',       icon: Shield,          roles: ['admin'] },
 ]
 
 export default function Layout() {
@@ -70,6 +72,10 @@ export default function Layout() {
               <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
               <p className="text-xs text-gray-400 capitalize">{user?.role}</p>
             </div>
+            <NavLink to="/change-password" title="Change password"
+              className="text-gray-400 hover:text-brand-600 transition-colors">
+              <KeyRound size={16} />
+            </NavLink>
             <button onClick={handleLogout} title="Sign out"
               className="text-gray-400 hover:text-red-500 transition-colors">
               <LogOut size={16} />
