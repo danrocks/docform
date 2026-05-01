@@ -24,7 +24,7 @@ def list_roles(current_user: dict = Depends(verify_tenant_match)):
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_role(body: RoleCreate, current_user: dict = Depends(verify_tenant_match)):
-    if current_user["role"] not in ("admin", "superadmin"):
+    if current_user["role"] != "superadmin":
         raise HTTPException(status_code=403, detail="Not permitted")
     repo = get_role_repository()
     if repo.get_by_name(body.name):
@@ -37,7 +37,7 @@ def create_role(body: RoleCreate, current_user: dict = Depends(verify_tenant_mat
 
 @router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_role(name: str, current_user: dict = Depends(verify_tenant_match)):
-    if current_user["role"] not in ("admin", "superadmin"):
+    if current_user["role"] != "superadmin":
         raise HTTPException(status_code=403, detail="Not permitted")
     repo = get_role_repository()
     user_repo = get_user_repository()
@@ -57,7 +57,7 @@ class RoleUpdate(BaseModel):
 
 @router.put("/{name}")
 def update_role(name: str, body: RoleUpdate, current_user: dict = Depends(verify_tenant_match)):
-    if current_user["role"] not in ("admin", "superadmin"):
+    if current_user["role"] != "superadmin":
         raise HTTPException(status_code=403, detail="Not permitted")
     repo = get_role_repository()
     existing = repo.get_by_name(name)

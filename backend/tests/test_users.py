@@ -261,21 +261,21 @@ class TestChangePassword:
 
 
 class TestUpdateRole:
-    def test_update_role_description(self, client, admin_token):
+    def test_update_role_description(self, client, superadmin_token):
         resp = client.put(
             "/api/roles/admin",
             json={"description": "Updated admin description"},
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"},
         )
         assert resp.status_code == 200
         assert resp.json()["description"] == "Updated admin description"
         assert resp.json()["name"] == "admin"
 
-    def test_update_role_not_found(self, client, admin_token):
+    def test_update_role_not_found(self, client, superadmin_token):
         resp = client.put(
             "/api/roles/nonexistent",
             json={"description": "X"},
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"},
         )
         assert resp.status_code == 404
 

@@ -125,6 +125,12 @@ def create_user(body: UserCreate, request: Request, current_user: dict = Depends
     repo = get_user_repository()
 
     if current_user["role"] == "superadmin" and body.tenant_id is not None:
+        from repositories.factory import get_tenant_repository
+        if not get_tenant_repository().get_by_id(body.tenant_id):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Tenant '{body.tenant_id}' does not exist",
+            )
         assign_tenant_id = body.tenant_id
     else:
         assign_tenant_id = current_user.get("tenant_id")
