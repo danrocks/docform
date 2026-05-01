@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 from auth_utils import require_role, get_current_user
 from repositories.factory import get_role_repository, get_user_repository
+from tenant_context import verify_tenant_match
 
 router = APIRouter()
 
@@ -16,13 +17,15 @@ class RoleCreate(BaseModel):
 
 
 @router.get("")
-def list_roles(current_user: dict = Depends(get_current_user)):
+def list_roles(current_user: dict = Depends(verify_tenant_match)):
     repo = get_role_repository()
     return repo.get_all()
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_role(body: RoleCreate, current_user: dict = Depends(require_role("admin"))):
+def create_role(body: RoleCreate, current_user: dict = Depends(verify_tenant_match)):
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
     repo = get_role_repository()
     if repo.get_by_name(body.name):
         raise HTTPException(
@@ -33,7 +36,9 @@ def create_role(body: RoleCreate, current_user: dict = Depends(require_role("adm
 
 
 @router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_role(name: str, current_user: dict = Depends(require_role("admin"))):
+def delete_role(name: str, current_user: dict = Depends(verify_tenant_match)):
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
     repo = get_role_repository()
     user_repo = get_user_repository()
     users_with_role = [u for u in user_repo.get_all() if u["role"] == name]
@@ -51,7 +56,9 @@ class RoleUpdate(BaseModel):
 
 
 @router.put("/{name}")
-def update_role(name: str, body: RoleUpdate, current_user: dict = Depends(require_role("admin"))):
+def update_role(name: str, body: RoleUpdate, current_user: dict = Depends(verify_tenant_match)):
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
     repo = get_role_repository()
     existing = repo.get_by_name(name)
     if not existing:

@@ -36,10 +36,10 @@ class TestRoleSeeding:
     def test_seeded_roles_exist(self, seeded_roles):
         roles = seeded_roles.get_all()
         names = {r["name"] for r in roles}
-        assert names == {"admin", "staff", "approver"}
+        assert names == {"admin", "staff", "approver", "superadmin"}
 
     def test_seeded_role_count(self, seeded_roles):
-        assert seeded_roles.count() == 3
+        assert seeded_roles.count() == 4
 
 
 class TestValidateRole:
@@ -147,6 +147,7 @@ class TestUserRoleValidation:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.put(
             "/api/users/u-upd",
@@ -164,6 +165,7 @@ class TestUserRoleValidation:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.put(
             "/api/users/u-upd2",
@@ -181,6 +183,7 @@ class TestUserRoleValidation:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.put(
             "/api/users/u-upd3",

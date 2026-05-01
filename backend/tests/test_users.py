@@ -31,6 +31,7 @@ class TestListUsers:
                 "password": hash_password("password1"),
                 "role": "staff",
                 "name": f"Pag User {i}",
+            "tenant_id": "tenant-a",
             })
         resp = client.get(
             "/api/users?skip=1&limit=2",
@@ -54,6 +55,7 @@ class TestGetUser:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Get Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.get(
             "/api/users/get-user-1",
@@ -125,6 +127,7 @@ class TestUpdateUser:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Target",
+            "tenant_id": "tenant-a",
         })
 
     def test_update_user_name(self, client, admin_token, user_repo):
@@ -149,6 +152,7 @@ class TestUpdateUser:
         login_resp = client.post(
             "/api/auth/login",
             data={"username": "updpwuser", "password": "newpass12"},
+            headers={"Host": "alpha.localhost:3000"},
         )
         assert login_resp.status_code == 200
 
@@ -191,6 +195,7 @@ class TestDeleteUser:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Del Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.delete(
             "/api/users/del-user-1",
@@ -234,6 +239,7 @@ class TestChangePassword:
         login_resp = client.post(
             "/api/auth/login",
             data={"username": "testadmin", "password": "newpass456"},
+            headers={"Host": "alpha.localhost:3000"},
         )
         assert login_resp.status_code == 200
 
@@ -301,6 +307,7 @@ class TestPasswordValidation:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "PW Val",
+            "tenant_id": "tenant-a",
         })
         resp = client.put(
             "/api/users/pw-val-1",
@@ -367,7 +374,7 @@ class TestUsernameValidation:
 # --- Point 4: Rate limiting ---
 
 class TestRateLimit:
-    def test_fifth_failed_login_still_allowed(self, client, user_repo):
+    def test_fifth_failed_login_still_allowed(self, client, user_repo, tenant_a):
         from auth_utils import hash_password
         import rate_limit
         rate_limit._attempts.clear()
@@ -378,12 +385,13 @@ class TestRateLimit:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Rate User",
+            "tenant_id": "tenant-a",
         })
         for _ in range(5):
-            resp = client.post("/api/auth/login", data={"username": "rateuser", "password": "wrong1234"})
+            resp = client.post("/api/auth/login", data={"username": "rateuser", "password": "wrong1234"}, headers={"Host": "alpha.localhost:3000"})
             assert resp.status_code == 401
 
-    def test_sixth_failed_login_blocked(self, client, user_repo):
+    def test_sixth_failed_login_blocked(self, client, user_repo, tenant_a):
         from auth_utils import hash_password
         import rate_limit
         rate_limit._attempts.clear()
@@ -394,15 +402,16 @@ class TestRateLimit:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Rate User 2",
+            "tenant_id": "tenant-a",
         })
         for _ in range(5):
-            client.post("/api/auth/login", data={"username": "rateuser2", "password": "wrong1234"})
+            client.post("/api/auth/login", data={"username": "rateuser2", "password": "wrong1234"}, headers={"Host": "alpha.localhost:3000"})
 
-        resp = client.post("/api/auth/login", data={"username": "rateuser2", "password": "wrong1234"})
+        resp = client.post("/api/auth/login", data={"username": "rateuser2", "password": "wrong1234"}, headers={"Host": "alpha.localhost:3000"})
         assert resp.status_code == 429
         assert "Retry-After" in resp.headers
 
-    def test_successful_login_resets_counter(self, client, user_repo):
+    def test_successful_login_resets_counter(self, client, user_repo, tenant_a):
         from auth_utils import hash_password
         import rate_limit
         rate_limit._attempts.clear()
@@ -413,16 +422,17 @@ class TestRateLimit:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Rate User 3",
+            "tenant_id": "tenant-a",
         })
         for _ in range(4):
-            client.post("/api/auth/login", data={"username": "rateuser3", "password": "wrong1234"})
+            client.post("/api/auth/login", data={"username": "rateuser3", "password": "wrong1234"}, headers={"Host": "alpha.localhost:3000"})
 
-        resp = client.post("/api/auth/login", data={"username": "rateuser3", "password": "password1"})
+        resp = client.post("/api/auth/login", data={"username": "rateuser3", "password": "password1"}, headers={"Host": "alpha.localhost:3000"})
         assert resp.status_code == 200
 
         # After reset, failures should count from zero again
         for _ in range(5):
-            resp = client.post("/api/auth/login", data={"username": "rateuser3", "password": "wrong1234"})
+            resp = client.post("/api/auth/login", data={"username": "rateuser3", "password": "wrong1234"}, headers={"Host": "alpha.localhost:3000"})
             assert resp.status_code == 401
 
 
@@ -463,6 +473,7 @@ class TestPublicUserInfo:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Public User",
+            "tenant_id": "tenant-a",
         })
         resp = client.get(
             "/api/users/pub-user-1/public",
@@ -489,6 +500,7 @@ class TestPublicUserInfo:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Full User",
+            "tenant_id": "tenant-a",
         })
         resp = client.get(
             "/api/users/full-user-1",
@@ -524,6 +536,7 @@ class TestPaginationExtended:
                 "password": hash_password("password1"),
                 "role": "staff",
                 "name": f"Pag2 User {i}",
+            "tenant_id": "tenant-a",
             })
         resp = client.get(
             "/api/users?skip=1&limit=2",

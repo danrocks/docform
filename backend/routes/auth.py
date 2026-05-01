@@ -12,6 +12,7 @@ from auth_utils import (
 from repositories.factory import get_user_repository
 from rate_limit import check_rate_limit, record_failure, reset
 from validators import validate_password
+from tenant_context import get_current_tenant, is_admin_subdomain, verify_tenant_match
 
 router = APIRouter()
 
@@ -27,8 +28,17 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     ip = request.client.host
     check_rate_limit(ip)
 
+    tenant = get_current_tenant(request)
+
+    if is_admin_subdomain(request):
+        tenant_id = None
+    elif tenant:
+        tenant_id = tenant["id"]
+    else:
+        raise HTTPException(status_code=404, detail="Not found")
+
     repo = get_user_repository()
-    user = repo.get_by_username(form_data.username)
+    user = repo.get_by_username(form_data.username, tenant_id=tenant_id)
     if not user or not verify_password(form_data.password, user["password"]):
         record_failure(ip)
         raise HTTPException(
@@ -36,13 +46,13 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
         )
     reset(ip)
-    token = create_access_token({"sub": user["id"], "role": user["role"]})
+    token = create_access_token({"sub": user["id"], "role": user["role"], "tenant_id": user.get("tenant_id")})
     safe_user = {k: v for k, v in user.items() if k != "password"}
     return {"access_token": token, "token_type": "bearer", "user": safe_user}
 
 
 @router.get("/me")
-def me(current_user: dict = Depends(get_current_user)):
+def me(current_user: dict = Depends(verify_tenant_match)):
     return {k: v for k, v in current_user.items() if k != "password"}
 
 
@@ -52,7 +62,7 @@ class PasswordChange(BaseModel):
 
 
 @router.put("/me/password")
-def change_password(body: PasswordChange, current_user: dict = Depends(get_current_user)):
+def change_password(body: PasswordChange, current_user: dict = Depends(verify_tenant_match)):
     if not verify_password(body.current_password, current_user["password"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

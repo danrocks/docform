@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -11,20 +11,50 @@ from datetime import datetime
 from docxtpl import DocxTemplate
 from auth_utils import get_current_user, require_role
 from question_schema import validate_submission_data
+from tenant_context import get_current_tenant, is_tenant_subdomain, verify_tenant_match
 
 router = APIRouter()
 
-TEMPLATES_DATA = Path("data/templates")
-TEMPLATES_UPLOAD = Path("uploads/templates")
-SUBMISSIONS_DATA = Path("data/submissions")
-GENERATED = Path("uploads/generated")
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
-def read_submissions(filter_template: str = None, filter_user: str = None, role: str = None) -> list:
+def get_submissions_dir(request: Request) -> Path:
+    if not is_tenant_subdomain(request):
+        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
+    tenant = get_current_tenant(request)
+    if not tenant:
+        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
+    path = BACKEND_ROOT / "data" / "submissions" / tenant["id"]
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_templates_dir(request: Request) -> Path:
+    if not is_tenant_subdomain(request):
+        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
+    tenant = get_current_tenant(request)
+    if not tenant:
+        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
+    path = BACKEND_ROOT / "data" / "templates" / tenant["id"]
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_generated_dir(request: Request) -> Path:
+    if not is_tenant_subdomain(request):
+        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
+    tenant = get_current_tenant(request)
+    if not tenant:
+        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
+    path = BACKEND_ROOT / "uploads" / "generated" / tenant["id"]
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def read_submissions(submissions_dir: Path, filter_template: str = None, filter_user: str = None, role: str = None) -> list:
     out = []
-    for f in SUBMISSIONS_DATA.glob("*.json"):
+    for f in submissions_dir.glob("*.json"):
         try:
-            print(f"Debug: loading submission... {f.name}")
             s = json.loads(f.read_text())
             if filter_template and s.get("template_id") != filter_template:
                 continue
@@ -44,16 +74,19 @@ class SubmissionCreate(BaseModel):
 
 @router.get("/")
 def list_submissions(
+    request: Request,
     template_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(verify_tenant_match),
 ):
+    submissions_dir = get_submissions_dir(request)
     user_id = current_user["id"] if current_user["role"] == "staff" else None
-    return read_submissions(filter_template=template_id, filter_user=user_id, role=current_user["role"])
+    return read_submissions(submissions_dir, filter_template=template_id, filter_user=user_id, role=current_user["role"])
 
 
 @router.get("/{submission_id}")
-def get_submission(submission_id: str, current_user: dict = Depends(get_current_user)):
-    path = SUBMISSIONS_DATA / f"{submission_id}.json"
+def get_submission(submission_id: str, request: Request, current_user: dict = Depends(verify_tenant_match)):
+    submissions_dir = get_submissions_dir(request)
+    path = submissions_dir / f"{submission_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Submission not found")
     sub = json.loads(path.read_text())
@@ -65,20 +98,24 @@ def get_submission(submission_id: str, current_user: dict = Depends(get_current_
 @router.post("/")
 def create_submission(
     body: SubmissionCreate,
-    current_user: dict = Depends(get_current_user)
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
 ):
-    tpl_path = TEMPLATES_DATA / f"{body.template_id}_meta.json"
+    templates_dir = get_templates_dir(request)
+    submissions_dir = get_submissions_dir(request)
+    generated_dir = get_generated_dir(request)
+
+    tpl_path = templates_dir / f"{body.template_id}_meta.json"
     if not tpl_path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
     meta = json.loads(tpl_path.read_text())
 
-    interview_path = TEMPLATES_DATA / meta.get("interviewFile", "")
+    interview_path = templates_dir / meta.get("interviewFile", "")
     if not interview_path.exists():
         raise HTTPException(status_code=500, detail="Template interview file not found")
     interview = json.loads(interview_path.read_text())
     fields = interview.get("components", [])
 
-    # Validate submission data against interview components
     try:
         validated_data = validate_submission_data(fields, body.data)
     except ValueError as e:
@@ -103,9 +140,8 @@ def create_submission(
         "pdf_path": None,
     }
 
-    # Generate documents immediately
     try:
-        docx_out, pdf_out = generate_documents(meta, submission)
+        docx_out, pdf_out = generate_documents(meta, submission, templates_dir, generated_dir)
         submission["docx_path"] = str(docx_out)
         submission["pdf_path"] = str(pdf_out) if pdf_out else None
         submission["status"] = "generated"
@@ -113,38 +149,33 @@ def create_submission(
         submission["status"] = "error"
         submission["error"] = str(e)
 
-    (SUBMISSIONS_DATA / f"{submission_id}.json").write_text(json.dumps(submission, indent=2))
+    (submissions_dir / f"{submission_id}.json").write_text(json.dumps(submission, indent=2))
 
-    # Increment submission count on template meta
     meta["submissionCount"] = meta.get("submissionCount", 0) + 1
     tpl_path.write_text(json.dumps(meta, indent=2))
 
     return submission
 
 
-def generate_documents(template: dict, submission: dict):
-    """Fill the docx template and convert to PDF.
-
-    `template` is the template meta dict (uses `documentFile`).
-    """
-    GENERATED.mkdir(parents=True, exist_ok=True)
-    src = TEMPLATES_DATA / template["documentFile"]
+def generate_documents(template: dict, submission: dict, templates_dir: Path, generated_dir: Path):
+    """Fill the docx template and convert to PDF."""
+    generated_dir.mkdir(parents=True, exist_ok=True)
+    src = templates_dir / template["documentFile"]
     if not src.exists():
         raise FileNotFoundError(f"Template file not found: {src}")
 
     sid = submission["id"]
-    docx_out = GENERATED / f"{sid}.docx"
-    pdf_out = GENERATED / f"{sid}.pdf"
+    docx_out = generated_dir / f"{sid}.docx"
+    pdf_out = generated_dir / f"{sid}.pdf"
 
     tpl = DocxTemplate(src)
     tpl.render(submission["data"])
     tpl.save(docx_out)
 
-    # Try LibreOffice for PDF conversion
     lo_path = shutil.which("libreoffice") or shutil.which("soffice")
     if lo_path:
         result = subprocess.run(
-            [lo_path, "--headless", "--convert-to", "pdf", "--outdir", str(GENERATED), str(docx_out)],
+            [lo_path, "--headless", "--convert-to", "pdf", "--outdir", str(generated_dir), str(docx_out)],
             capture_output=True, timeout=30
         )
         if result.returncode != 0:
@@ -158,9 +189,13 @@ def generate_documents(template: dict, submission: dict):
 @router.put("/{submission_id}/approve")
 def approve_submission(
     submission_id: str,
-    current_user: dict = Depends(require_role("admin", "approver"))
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
 ):
-    path = SUBMISSIONS_DATA / f"{submission_id}.json"
+    if current_user["role"] not in ("admin", "approver", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    submissions_dir = get_submissions_dir(request)
+    path = submissions_dir / f"{submission_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Submission not found")
     sub = json.loads(path.read_text())
@@ -176,9 +211,13 @@ def approve_submission(
 def reject_submission(
     submission_id: str,
     body: dict,
-    current_user: dict = Depends(require_role("admin", "approver"))
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
 ):
-    path = SUBMISSIONS_DATA / f"{submission_id}.json"
+    if current_user["role"] not in ("admin", "approver", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    submissions_dir = get_submissions_dir(request)
+    path = submissions_dir / f"{submission_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Submission not found")
     sub = json.loads(path.read_text())
@@ -194,12 +233,14 @@ def reject_submission(
 def download_document(
     submission_id: str,
     format: str,
-    current_user: dict = Depends(get_current_user)
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
 ):
     if format not in ("docx", "pdf"):
         raise HTTPException(status_code=400, detail="Format must be docx or pdf")
 
-    path = SUBMISSIONS_DATA / f"{submission_id}.json"
+    submissions_dir = get_submissions_dir(request)
+    path = submissions_dir / f"{submission_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Submission not found")
     sub = json.loads(path.read_text())

@@ -16,6 +16,7 @@ from question_schema import validate_questions
 from config import settings
 from AiResponseSaver import AiResponseSaver
 from datetime import datetime
+from tenant_context import get_current_tenant, is_tenant_subdomain, verify_tenant_match
 
 from prompts.promptbuilder import _build_system_prompt
 import providers  # noqa: F401 — triggers provider self-registration  
@@ -32,21 +33,28 @@ PROVIDER_SCHEMA = {
 
 router = APIRouter()
 
-# TEMPLATES_DATA = Path("data/templates")
 TEMPLATES_DATA = BACKEND_ROOT / "data" / "templates"  
 
 TEMPLATES_UPLOAD = Path("uploads/templates")
 
 OPENAI_SYSTEM_PROMPT = _build_system_prompt()
 
-def _load_template_with_interview(meta_path: Path) -> dict:
-    """Load a template meta file and merge its associated interview components.
 
-    Returns the meta dict with `fields` (from interview `components`) and `rules`
-    populated. If the interview file is missing, fields and rules are empty lists.
-    """
+def get_templates_dir(request: Request) -> Path:
+    if not is_tenant_subdomain(request):
+        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
+    tenant = get_current_tenant(request)
+    if not tenant:
+        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
+    path = BACKEND_ROOT / "data" / "templates" / tenant["id"]
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _load_template_with_interview(meta_path: Path, templates_dir: Path) -> dict:
+    """Load a template meta file and merge its associated interview components."""
     meta = json.loads(meta_path.read_text())
-    interview_path = TEMPLATES_DATA / meta.get("interviewFile", "")
+    interview_path = templates_dir / meta.get("interviewFile", "")
     if interview_path.exists():
         interview = json.loads(interview_path.read_text())
         meta["fields"] = interview.get("components", [])
@@ -57,14 +65,12 @@ def _load_template_with_interview(meta_path: Path) -> dict:
     return meta
 
 
-def read_templates() -> list:
+def read_templates(templates_dir: Path) -> list:
     out = []
-    for f in TEMPLATES_DATA.glob("*_meta.json"):
+    for f in templates_dir.glob("*_meta.json"):
         try:
-            print("getting templates from", f )
-            out.append(_load_template_with_interview(f))
+            out.append(_load_template_with_interview(f, templates_dir))
         except Exception:
-            print(f"Failed to load template meta from {f}", file=sys.stderr)
             pass
     return sorted(out, key=lambda x: x.get("createdAt", x.get("created_at", "")), reverse=True)
 
@@ -85,7 +91,7 @@ def extract_placeholders_from_docx(path: Path) -> List[str]:
 
 
 @router.get("/ai-status")  
-def ai_status(current_user: dict = Depends(get_current_user)):  
+def ai_status(current_user: dict = Depends(verify_tenant_match)):  
     provider_name = os.environ.get("AI_PROVIDER", "devin")  
     try:  
         get_provider(provider_name, system_prompt=OPENAI_SYSTEM_PROMPT)  
@@ -95,44 +101,44 @@ def ai_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/")
-def list_templates():
-    logging.info(f"list_templates called, TEMPLATES_DATA={TEMPLATES_DATA.resolve()}")  
-    # print("Listing templates for user", current_user["username"])
-    templates = read_templates()
-    #if current_user["role"] == "staff":
-     #   templates = [t for t in templates if t.get("active", True)]
-    return templates
+def list_templates(request: Request, current_user: dict = Depends(verify_tenant_match)):
+    templates_dir = get_templates_dir(request)
+    return read_templates(templates_dir)
 
 
 @router.get("/{template_id}")
-def get_template(template_id: str, current_user: dict = Depends(get_current_user)):
-    logging.info(f"get_template called with id={template_id}")
-    path = TEMPLATES_DATA / f"{template_id}_meta.json"
+def get_template(template_id: str, request: Request, current_user: dict = Depends(verify_tenant_match)):
+    templates_dir = get_templates_dir(request)
+    path = templates_dir / f"{template_id}_meta.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
-    return _load_template_with_interview(path)
+    return _load_template_with_interview(path, templates_dir)
 
 
 @router.post("/")
 async def create_template(
+    request: Request,
     name: str = Form(...),
     description: str = Form(""),
     file: UploadFile = File(...),
     interview_json: Optional[str] = Form(None),
-    current_user: dict = Depends(require_role("admin"))
+    current_user: dict = Depends(verify_tenant_match),
 ):
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    templates_dir = get_templates_dir(request)
+
     if not file.filename.endswith(".docx"):
         raise HTTPException(status_code=400, detail="Only .docx files are supported")
 
     template_id = str(uuid.uuid4())
     filename = f"{template_id}.docx"
-    upload_path = TEMPLATES_DATA / filename
+    upload_path = templates_dir / filename
 
     content = await file.read()
     upload_path.write_bytes(content)
 
     if interview_json:
-        # Parse and validate user-provided interview definition
         try:
             parsed = json.loads(interview_json)
         except json.JSONDecodeError as e:
@@ -161,7 +167,6 @@ async def create_template(
             upload_path.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail=str(e))
     else:
-        # Auto-detect placeholders and create default string questions
         placeholders = extract_placeholders_from_docx(upload_path)
         interview = {
             "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
@@ -183,7 +188,7 @@ async def create_template(
         }
 
     interview_filename = f"{template_id}_interview.json"
-    (TEMPLATES_DATA / interview_filename).write_text(json.dumps(interview, indent=2))
+    (templates_dir / interview_filename).write_text(json.dumps(interview, indent=2))
 
     meta = {
         "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/TemplateMetaSchema.json",
@@ -202,18 +207,22 @@ async def create_template(
         "generationMethod": "upload",
     }
 
-    meta_path = TEMPLATES_DATA / f"{template_id}_meta.json"
+    meta_path = templates_dir / f"{template_id}_meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(meta_path)
+    return _load_template_with_interview(meta_path, templates_dir)
 
 
 @router.put("/{template_id}")
 def update_template(
     template_id: str,
     body: dict,
-    current_user: dict = Depends(require_role("admin"))
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
 ):
-    path = TEMPLATES_DATA / f"{template_id}_meta.json"
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    templates_dir = get_templates_dir(request)
+    path = templates_dir / f"{template_id}_meta.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
     meta = json.loads(path.read_text())
@@ -228,7 +237,7 @@ def update_template(
             components = validate_questions(body["fields"])
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        interview_path = TEMPLATES_DATA / meta.get("interviewFile", f"{template_id}_interview.json")
+        interview_path = templates_dir / meta.get("interviewFile", f"{template_id}_interview.json")
         if interview_path.exists():
             interview = json.loads(interview_path.read_text())
         else:
@@ -245,20 +254,24 @@ def update_template(
 
     meta["updatedAt"] = datetime.utcnow().isoformat()
     path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(path)
+    return _load_template_with_interview(path, templates_dir)
 
 
 @router.delete("/{template_id}")
 def delete_template(
     template_id: str,
-    current_user: dict = Depends(require_role("admin"))
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
 ):
-    path = TEMPLATES_DATA / f"{template_id}_meta.json"
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    templates_dir = get_templates_dir(request)
+    path = templates_dir / f"{template_id}_meta.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
     meta = json.loads(path.read_text())
-    docx_path = TEMPLATES_DATA / meta.get("documentFile", "")
-    interview_path = TEMPLATES_DATA / meta.get("interviewFile", "")
+    docx_path = templates_dir / meta.get("documentFile", "")
+    interview_path = templates_dir / meta.get("interviewFile", "")
     if docx_path.exists():
         docx_path.unlink()
     if interview_path.exists():
@@ -286,7 +299,6 @@ def _create_docx_from_content(document_content: str, output_path: Path):
         stripped = line.strip()
         if not stripped:
             continue
-        # Detect headings (lines in ALL CAPS or starting with #)
         if stripped.startswith("# "):
             doc.add_heading(stripped[2:], level=1)
         elif stripped.startswith("## "):
@@ -323,21 +335,23 @@ def _get_provider_format() -> str | None:
 
 @router.post("/generate")  
 def generate_template(  
+    request: Request,
     body: GenerateRequest,  
-    current_user: dict = Depends(require_role("admin"))  
+    current_user: dict = Depends(verify_tenant_match),
 ):  
-    TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)  
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    templates_dir = get_templates_dir(request)
+    templates_dir.mkdir(parents=True, exist_ok=True)  
   
     ai_result = _call_ai(body.prompt)  
-    print(ai_result)  
   
-    fmt = _get_provider_format()  # reads from schema file
+    fmt = _get_provider_format()
 
     template_id = str(uuid.uuid4())  
     filename = f"{template_id}.docx"  
-    upload_path = TEMPLATES_DATA / filename  
+    upload_path = templates_dir / filename  
   
-    # ── Route 1: URL (Devin) — download files into TEMPLATES_DATA ──  
     if fmt == "url":  
         import httpx as _httpx  
   
@@ -346,7 +360,6 @@ def generate_template(
         if not doc_url or not int_url:  
             raise HTTPException(status_code=500, detail="AI did not return document/interview URLs")  
   
-        # Download .docx  
         try:  
             doc_resp = _httpx.get(doc_url, follow_redirects=True, timeout=60)  
             doc_resp.raise_for_status()  
@@ -354,7 +367,6 @@ def generate_template(
         except Exception as e:  
             raise HTTPException(status_code=502, detail=f"Failed to download document from {doc_url}: {e}")  
   
-        # Download interview JSON  
         try:  
             int_resp = _httpx.get(int_url, follow_redirects=True, timeout=60)  
             int_resp.raise_for_status()  
@@ -362,7 +374,6 @@ def generate_template(
         except Exception as e:  
             raise HTTPException(status_code=502, detail=f"Failed to download interview from {int_url}: {e}")  
   
-        # Extract questions list
         if isinstance(interview_data, dict):
             raw_questions = interview_data.get("components", interview_data.get("questions", []))
         elif isinstance(interview_data, list):
@@ -370,7 +381,6 @@ def generate_template(
         else:
             raise HTTPException(status_code=500, detail="Unexpected interview format")
 
-    # ── Route 2: base64 (Gemini) — decode into TEMPLATES_DATA ──  
     elif fmt == "base64":  
         doc_b64 = ai_result.get("document", "")  
         int_b64 = ai_result.get("interview", "")  
@@ -395,7 +405,6 @@ def generate_template(
         else:
             raise HTTPException(status_code=500, detail="Unexpected interview format")
 
-    # ── Route 3: legacy (OpenAI) — plain text document_content ──
     else:
         document_content = ai_result.get("document_content", "")
         raw_questions = ai_result.get("questions", [])
@@ -432,7 +441,7 @@ def generate_template(
         }
 
     interview_filename = f"{template_id}_interview.json"
-    (TEMPLATES_DATA / interview_filename).write_text(json.dumps(interview, indent=2))
+    (templates_dir / interview_filename).write_text(json.dumps(interview, indent=2))
 
     meta = {
         "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/TemplateMetaSchema.json",
@@ -452,17 +461,21 @@ def generate_template(
         "originalPrompt": body.prompt,
     }
 
-    meta_path = TEMPLATES_DATA / f"{template_id}_meta.json"
+    meta_path = templates_dir / f"{template_id}_meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(meta_path)
+    return _load_template_with_interview(meta_path, templates_dir)
 
 @router.post("/{template_id}/regenerate")
 def regenerate_template(
     template_id: str,
     body: RegenerateRequest,
-    current_user: dict = Depends(require_role("admin"))
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
 ):
-    path = TEMPLATES_DATA / f"{template_id}_meta.json"
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    templates_dir = get_templates_dir(request)
+    path = templates_dir / f"{template_id}_meta.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -488,15 +501,14 @@ def regenerate_template(
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI generated invalid questions: {e}")
 
-    # Overwrite existing docx
-    upload_path = TEMPLATES_DATA / meta["documentFile"]
+    upload_path = templates_dir / meta["documentFile"]
     try:
         _create_docx_from_content(document_content, upload_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create document: {e}")
 
     interview_filename = meta.get("interviewFile", f"{template_id}_interview.json")
-    interview_path = TEMPLATES_DATA / interview_filename
+    interview_path = templates_dir / interview_filename
     if interview_path.exists():
         interview = json.loads(interview_path.read_text())
     else:
@@ -517,12 +529,11 @@ def regenerate_template(
     meta["updatedAt"] = datetime.utcnow().isoformat()
 
     path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(path)
+    return _load_template_with_interview(path, templates_dir)
 
 # New route to serve generated files safely
 @router.get("/download/{filename}")
 def download_generated_file(filename: str):
-    # allow only simple filenames to prevent path traversal
     if not re.match(r"^[\w\-. ]+\.(json|docx)$", filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "generated"))
