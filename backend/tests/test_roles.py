@@ -36,10 +36,10 @@ class TestRoleSeeding:
     def test_seeded_roles_exist(self, seeded_roles):
         roles = seeded_roles.get_all()
         names = {r["name"] for r in roles}
-        assert names == {"admin", "staff", "approver"}
+        assert names == {"admin", "staff", "approver", "superadmin"}
 
     def test_seeded_role_count(self, seeded_roles):
-        assert seeded_roles.count() == 3
+        assert seeded_roles.count() == 4
 
 
 class TestValidateRole:
@@ -73,20 +73,20 @@ class TestRoleEndpoints:
         resp = client.get("/api/roles")
         assert resp.status_code == 401
 
-    def test_create_role(self, client, admin_token):
+    def test_create_role(self, client, superadmin_token):
         resp = client.post(
             "/api/roles",
             json={"name": "reviewer", "description": "Code reviewer"},
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"},
         )
         assert resp.status_code == 201
         assert resp.json()["name"] == "reviewer"
 
-    def test_create_role_duplicate(self, client, admin_token):
+    def test_create_role_duplicate(self, client, superadmin_token):
         resp = client.post(
             "/api/roles",
             json={"name": "admin", "description": "Dup"},
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"},
         )
         assert resp.status_code == 409
 
@@ -98,22 +98,30 @@ class TestRoleEndpoints:
         )
         assert resp.status_code == 403
 
-    def test_delete_role(self, client, admin_token):
+    def test_create_role_admin_forbidden(self, client, admin_token):
+        resp = client.post(
+            "/api/roles",
+            json={"name": "newrole", "description": ""},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 403
+
+    def test_delete_role(self, client, superadmin_token):
         client.post(
             "/api/roles",
             json={"name": "temp", "description": "Temporary"},
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"},
         )
-        resp = client.delete("/api/roles/temp", headers={"Authorization": f"Bearer {admin_token}"})
+        resp = client.delete("/api/roles/temp", headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"})
         assert resp.status_code == 204
 
-    def test_delete_role_in_use(self, client, admin_token):
-        resp = client.delete("/api/roles/admin", headers={"Authorization": f"Bearer {admin_token}"})
+    def test_delete_role_in_use(self, client, superadmin_token):
+        resp = client.delete("/api/roles/admin", headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"})
         assert resp.status_code == 409
         assert "user(s) still assigned" in resp.json()["detail"]
 
-    def test_delete_role_not_found(self, client, admin_token):
-        resp = client.delete("/api/roles/nonexistent", headers={"Authorization": f"Bearer {admin_token}"})
+    def test_delete_role_not_found(self, client, superadmin_token):
+        resp = client.delete("/api/roles/nonexistent", headers={"Host": "admin.localhost:3000", "Authorization": f"Bearer {superadmin_token}"})
         assert resp.status_code == 404
 
     def test_delete_role_staff_forbidden(self, client, staff_token):
@@ -147,6 +155,7 @@ class TestUserRoleValidation:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.put(
             "/api/users/u-upd",
@@ -164,6 +173,7 @@ class TestUserRoleValidation:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.put(
             "/api/users/u-upd2",
@@ -181,6 +191,7 @@ class TestUserRoleValidation:
             "password": hash_password("password1"),
             "role": "staff",
             "name": "Update Me",
+            "tenant_id": "tenant-a",
         })
         resp = client.put(
             "/api/users/u-upd3",
