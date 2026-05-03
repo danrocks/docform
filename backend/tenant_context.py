@@ -34,6 +34,7 @@ def get_current_tenant(request: Request):
 def is_admin_subdomain(request: Request) -> bool:
     host = request.headers.get("host", "").split(":")[0]
     parts = host.split(".")
+    print(f"Checking admin subdomain for host '{host}' - parts: {parts}")
     return len(parts) >= 2 and parts[0] == "admin"
 
 

@@ -31,6 +31,7 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     tenant = get_current_tenant(request)
 
     if is_admin_subdomain(request):
+        print(  "Admin subdomain access - skipping tenant check")
         tenant_id = None
     elif tenant:
         tenant_id = tenant["id"]
