@@ -66,6 +66,15 @@ INSTRUCTIONS:
 Get system instructions from web page https://github.com/danrocks/docform/blob/master/backend/prompts/devinprompt.md.
 The web page includes detailed instructions and examples for how to format the document and interview JSON, including how to represent placeholders. Follow those instructions carefully.
 Follow any links in the instructions to get schema details. 
+
+OUTPUT FORMAT:
+Return your results via structured_output as a JSON object with:
+- "document": the .docx file content, base64-encoded (use base64.b64encode(open("file.docx","rb").read()).decode())
+- "interview": the interview JSON file content, base64-encoded (use base64.b64encode(open("file.json","rb").read()).decode())
+- "summary": brief description of what was created
+- "placeholderCount": number of unique placeholders
+
+Do NOT return URLs. Return the actual file content as base64 strings.
   
 USER REQUEST:  
 {prompt}  
@@ -76,20 +85,22 @@ USER REQUEST:
             "type": "object",  
             "required": ["document", "interview"],  
             "properties": {  
-                "document": {"type": "string", "description": "url to generated Word document"},  
-                "interview": {"type": "string", "description": "url to constructed template interview JSON"},  
+                "document": {"type": "string", "description": "Base64-encoded content of the generated .docx file"},  
+                "interview": {"type": "string", "description": "Base64-encoded content of the interview JSON file"},  
                 "summary": {"type": "string", "description": "Brief description of what was created"},  
                 "placeholderCount": {"type": "integer", "minimum": 1, "description": "Number of unique placeholders"},  
             },  
         }  
   
-    def _save_output(self, structured_output: dict) -> dict:  
+    def _save_output(self, structured_output: dict, tenant_id: str = None) -> dict:  
         """Persist raw Devin response JSON to TEMPLATES_DATA for audit."""  
         shared_uuid = uuid.uuid4().hex[:8]  
         json_str = json.dumps(structured_output, indent=2)  
     
         try:  
-            TEMPLATES_DATA   = TEMPLATES_DATA = Path(__file__).resolve().parent.parent.parent / "data" / "templates"
+            TEMPLATES_DATA = Path(__file__).resolve().parent.parent.parent / "data" / "templates"
+            if tenant_id:
+                TEMPLATES_DATA = TEMPLATES_DATA / tenant_id
             TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)  
             raw_filename = f"DevinResponse_{shared_uuid}.json"  
             (TEMPLATES_DATA / raw_filename).write_text(json_str, encoding="utf-8")  
@@ -99,7 +110,7 @@ USER REQUEST:
     
         return structured_output
   
-    def call(self, prompt: str, *, mode: str = "document", **kwargs) -> Dict[str, Any]:  
+    def call(self, prompt: str, *, mode: str = "document", tenant_id: str = None, **kwargs) -> Dict[str, Any]:  
         """Sync fallback — runs the async implementation in an event loop."""  
         try:  
             loop = asyncio.get_running_loop()  
@@ -111,11 +122,11 @@ USER REQUEST:
             # Caller should use acall() instead.  
             import concurrent.futures  
             with concurrent.futures.ThreadPoolExecutor() as pool:  
-                return pool.submit(asyncio.run, self.acall(prompt, mode=mode, **kwargs)).result()  
+                return pool.submit(asyncio.run, self.acall(prompt, mode=mode, tenant_id=tenant_id, **kwargs)).result()  
         else:  
-            return asyncio.run(self.acall(prompt, mode=mode, **kwargs))  
+            return asyncio.run(self.acall(prompt, mode=mode, tenant_id=tenant_id, **kwargs))  
   
-    async def acall(self, prompt: str, *, mode: str = "document", **kwargs) -> Dict[str, Any]:  
+    async def acall(self, prompt: str, *, mode: str = "document", tenant_id: str = None, **kwargs) -> Dict[str, Any]:  
         """Native async implementation — polls Devin session without blocking the event loop."""  
         api_key = self._get_api_key()  
         system_prompt = self._get_system_prompt()  
@@ -154,6 +165,8 @@ USER REQUEST:
         # 2. Poll until finished (non-blocking)  
         elapsed = 0  
         status_data = None  
+        unblock_attempts = 0
+        MAX_UNBLOCK_ATTEMPTS = 3
   
         async with httpx.AsyncClient(timeout=30) as client:  
             while elapsed < self.MAX_POLL_SECONDS:  
@@ -176,11 +189,28 @@ USER REQUEST:
                 if status == "finished":  
                     print("Devin call finished successfully")
                     break  
-                elif status in ("stopped", "failed", "blocked"):  
-                    raise HTTPException(  
-                        status_code=502,  
-                        detail=f"Devin session {status}: {status_data.get('error', 'unknown')}",  
-                    )  
+                elif status in ("stopped", "failed"):
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Devin session {status}: {status_data.get('error', 'unknown')}",
+                    )
+                elif status == "blocked":
+                    unblock_attempts += 1
+                    if unblock_attempts > MAX_UNBLOCK_ATTEMPTS:
+                        raise HTTPException(
+                            status_code=502,
+                            detail=f"Devin session blocked {MAX_UNBLOCK_ATTEMPTS} times, giving up",
+                        )
+                    try:
+                        await client.post(
+                            f"{self.DEVIN_API_BASE}/session/{session_id}/message",
+                            headers=headers,
+                            json={"message": "Do not wait for user input. Continue autonomously. Complete the task and provide the structured output with base64-encoded files."},
+                        )
+                        print(f"Devin session {session_id}: sent unblock message (attempt {unblock_attempts})")
+                    except Exception as e:
+                        print(f"Warning: failed to send unblock message: {e}")
+                    continue
             else:  
                 raise HTTPException(  
                     status_code=504,  
@@ -199,5 +229,5 @@ USER REQUEST:
             structured_output = json.loads(structured_output)  
   
         # 4. Save artifacts  
-        return self._save_output(structured_output)
+        return self._save_output(structured_output, tenant_id=tenant_id)
     

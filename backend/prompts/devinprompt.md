@@ -299,6 +299,10 @@ e.g. Show a warning component if `end\_date` is before `start\_date`.
 4. Design the interview with appropriate types, configs, grouping, and rules.
 5. Create the Word document (`.docx`) using `python-docx` with proper formatting.
 6. Create the interview definition JSON, validated against the schema.
-7. Return url to the documents created
+7. Return the files as base64-encoded strings in the structured_output JSON:
+   - `document`: base64-encode the .docx file bytes
+   - `interview`: base64-encode the interview JSON file content (UTF-8 bytes)
+
+   Use Python: `import base64; base64.b64encode(open("file.docx","rb").read()).decode()`
   
 
