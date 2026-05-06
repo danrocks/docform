@@ -363,6 +363,15 @@ def generate_template(
         if not doc_url or not int_url:
             raise HTTPException(status_code=500, detail="AI did not return document/interview URLs")
 
+        # Normalize Devin webapp attachment URLs to API endpoints
+        def _normalize_devin_url(url: str) -> str:
+            if "app.devin.ai/attachments/" in url:
+                return url.replace("https://app.devin.ai/attachments/", "https://api.devin.ai/v1/attachments/")
+            return url
+
+        doc_url = _normalize_devin_url(doc_url)
+        int_url = _normalize_devin_url(int_url)
+
         # Get API key for authenticated downloads
         devin_key = os.environ.get("DEVIN_KEY", getattr(settings, "DEVIN_KEY", None))
         download_headers = {}

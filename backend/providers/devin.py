@@ -18,7 +18,7 @@ class DevinProvider(AIProvider):
     """  
   
     DEVIN_API_BASE = "https://api.devin.ai/v1"  
-    MAX_POLL_SECONDS = 1200  
+    MAX_POLL_SECONDS = 600  
     POLL_INTERVAL = 10  
   
     def __init__(  
@@ -68,24 +68,15 @@ The web page includes detailed instructions and examples for how to format the d
 Follow any links in the instructions to get schema details. 
 
 OUTPUT FORMAT:
-When both files are ready, you MUST update the structured output with a JSON object.
-The "document" and "interview" values must be the ACTUAL base64-encoded file contents
-as raw strings — NOT file paths, NOT URLs, NOT file:/// references.
+After creating both files, upload them using the message_user tool with attachments,
+then update the structured output with a JSON object containing:
+- "document": the download URL of the uploaded .docx file
+- "interview": the download URL of the uploaded interview .json file
+- "summary": brief description of what was created
+- "placeholderCount": number of unique placeholders
 
-To produce the values, run this Python code and use the printed strings directly:
-  import base64
-  doc_b64 = base64.b64encode(open("your_file.docx", "rb").read()).decode()
-  int_b64 = base64.b64encode(open("your_file.json", "rb").read()).decode()
-
-Then update the structured output with:
-  "document": <the full doc_b64 string, which will be tens of thousands of characters>,
-  "interview": <the full int_b64 string>,
-  "summary": brief description of what was created,
-  "placeholderCount": number of unique placeholders
-
-CRITICAL: The document and interview values must each be long base64 strings
-(typically 20,000+ characters). If your values are short or contain "file://",
-"/home/", or any path, you have done it wrong — go back and encode the actual file bytes.
+The document and interview values MUST be URLs (https://...) pointing to the uploaded files.
+Do NOT use file paths or base64. Upload the files first, then use the resulting URLs.
   
 USER REQUEST:  
 {prompt}  
@@ -96,8 +87,8 @@ USER REQUEST:
             "type": "object",  
             "required": ["document", "interview"],  
             "properties": {  
-                "document": {"type": "string", "description": "Base64-encoded content of the generated .docx file"},  
-                "interview": {"type": "string", "description": "Base64-encoded content of the interview JSON file"},  
+                "document": {"type": "string", "description": "Download URL for the generated .docx file"},  
+                "interview": {"type": "string", "description": "Download URL for the interview JSON file"},  
                 "summary": {"type": "string", "description": "Brief description of what was created"},  
                 "placeholderCount": {"type": "integer", "minimum": 1, "description": "Number of unique placeholders"},  
             },  
@@ -198,21 +189,11 @@ USER REQUEST:
                 if so:
                     so_obj = json.loads(so) if isinstance(so, str) else so
                     doc_val = so_obj.get("document", "") if isinstance(so_obj, dict) else ""
-                    # Reject if values are file paths instead of actual base64
-                    if doc_val and not doc_val.startswith(("file:", "/", "http")):
-                        print(f"Devin session {session_id}: structured_output available (status={status})")
+                    if doc_val and doc_val.startswith("http"):
+                        print(f"Devin session {session_id}: structured_output with URLs available (status={status})")
                         break
                     else:
-                        print(f"Devin session {session_id}: structured_output has paths, not base64 — sending correction")
-                        try:
-                            await client.post(
-                                f"{self.DEVIN_API_BASE}/sessions/{session_id}/message",
-                                headers=headers,
-                                json={"message": "The structured output document/interview values contain file paths, not actual base64 content. Read the file bytes with Python: base64.b64encode(open('file.docx','rb').read()).decode() and update structured output with the resulting string."},
-                            )
-                        except Exception:
-                            pass
-                        so = None
+                        print(f"Devin session {session_id}: structured_output present but document is not a URL: {doc_val[:100]}")
 
                 if status == "finished":  
                     print("Devin call finished successfully")
@@ -233,7 +214,7 @@ USER REQUEST:
                         await client.post(
                             f"{self.DEVIN_API_BASE}/sessions/{session_id}/message",
                             headers=headers,
-                            json={"message": "Do not wait for user input. Continue autonomously. Complete the task and provide the structured output with base64-encoded files."},
+                            json={"message": "Do not wait for user input. Continue autonomously. Upload the files and update the structured output with the download URLs."},
                         )
                         print(f"Devin session {session_id}: sent unblock message (attempt {unblock_attempts})")
                     except Exception as e:

@@ -4,8 +4,8 @@
   "type": "object",  
   "required": ["document", "interview"],  
   "properties": {  
-    "document":       { "type": "string", "format": "base64", "description": "Base64-encoded .docx file content" },
-    "interview":      { "type": "string", "format": "base64", "description": "Base64-encoded interview JSON content" },
+    "document":       { "type": "string", "format": "url", "description": "Download URL for the generated .docx file" },
+    "interview":      { "type": "string", "format": "url", "description": "Download URL for the interview JSON file" },
     "summary":        { "type": "string", "description": "Brief description of what was created" },  
     "placeholderCount": { "type": "integer", "minimum": 1, "description": "Number of unique placeholders" }  
   },  
