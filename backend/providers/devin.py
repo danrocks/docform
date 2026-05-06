@@ -18,7 +18,7 @@ class DevinProvider(AIProvider):
     """  
   
     DEVIN_API_BASE = "https://api.devin.ai/v1"  
-    MAX_POLL_SECONDS = 600  
+    MAX_POLL_SECONDS = 1200  
     POLL_INTERVAL = 10  
   
     def __init__(  
