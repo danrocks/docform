@@ -312,12 +312,14 @@ def _create_docx_from_content(document_content: str, output_path: Path):
     doc.save(str(output_path))
 
 
-def _call_ai(prompt: str, model: str | None = None) -> dict:  
+def _call_ai(prompt: str, model: str | None = None, tenant_id: str | None = None) -> dict:  
     provider_name = os.environ.get("AI_PROVIDER", "devin")  
     provider = get_provider(provider_name, system_prompt=OPENAI_SYSTEM_PROMPT)  
     kwargs = {}  
     if model:  
         kwargs["model"] = model  
+    if tenant_id:
+        kwargs["tenant_id"] = tenant_id
     return provider.call(prompt, **kwargs)
 
 def _get_provider_format() -> str | None:  
@@ -344,7 +346,8 @@ def generate_template(
     templates_dir = get_templates_dir(request)
     templates_dir.mkdir(parents=True, exist_ok=True)  
   
-    ai_result = _call_ai(body.prompt)  
+    tenant = get_current_tenant(request)
+    ai_result = _call_ai(body.prompt, tenant_id=tenant["id"] if tenant else None)
   
     fmt = _get_provider_format()
 
@@ -352,28 +355,61 @@ def generate_template(
     filename = f"{template_id}.docx"  
     upload_path = templates_dir / filename  
   
-    if fmt == "url":  
-        import httpx as _httpx  
-  
-        doc_url = ai_result.get("document", "")  
-        int_url = ai_result.get("interview", "")  
-        if not doc_url or not int_url:  
-            raise HTTPException(status_code=500, detail="AI did not return document/interview URLs")  
-  
-        try:  
-            doc_resp = _httpx.get(doc_url, follow_redirects=True, timeout=60)  
-            doc_resp.raise_for_status()  
-            upload_path.write_bytes(doc_resp.content)  
-        except Exception as e:  
-            raise HTTPException(status_code=502, detail=f"Failed to download document from {doc_url}: {e}")  
-  
-        try:  
-            int_resp = _httpx.get(int_url, follow_redirects=True, timeout=60)  
-            int_resp.raise_for_status()  
-            interview_data = int_resp.json()  
-        except Exception as e:  
-            raise HTTPException(status_code=502, detail=f"Failed to download interview from {int_url}: {e}")  
-  
+    if fmt == "url":
+        import httpx as _httpx
+
+        doc_url = ai_result.get("document", "")
+        int_url = ai_result.get("interview", "")
+        if not doc_url or not int_url:
+            raise HTTPException(status_code=500, detail="AI did not return document/interview URLs")
+
+        # Normalize Devin webapp attachment URLs to API endpoints
+        def _normalize_devin_url(url: str) -> str:
+            if "app.devin.ai/attachments/" in url:
+                return url.replace("https://app.devin.ai/attachments/", "https://api.devin.ai/v1/attachments/")
+            return url
+
+        doc_url = _normalize_devin_url(doc_url)
+        int_url = _normalize_devin_url(int_url)
+
+        # Get API key for authenticated downloads
+        devin_key = os.environ.get("DEVIN_KEY", getattr(settings, "DEVIN_KEY", None))
+        download_headers = {}
+        if devin_key:
+            download_headers["Authorization"] = f"Bearer {devin_key}"
+
+        max_retries = 3
+
+        # Download document with retries
+        doc_resp = None
+        for attempt in range(max_retries):
+            try:
+                doc_resp = _httpx.get(doc_url, follow_redirects=True, timeout=60, headers=download_headers)
+                doc_resp.raise_for_status()
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise HTTPException(status_code=502, detail=f"Failed to download document from {doc_url} after {max_retries} attempts: {e}")
+                import time
+                time.sleep(2 ** attempt)  # exponential backoff: 1s, 2s, 4s
+
+        upload_path.write_bytes(doc_resp.content)
+
+        # Download interview with retries
+        int_resp = None
+        for attempt in range(max_retries):
+            try:
+                int_resp = _httpx.get(int_url, follow_redirects=True, timeout=60, headers=download_headers)
+                int_resp.raise_for_status()
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise HTTPException(status_code=502, detail=f"Failed to download interview from {int_url} after {max_retries} attempts: {e}")
+                import time
+                time.sleep(2 ** attempt)
+
+        interview_data = int_resp.json()
+
         if isinstance(interview_data, dict):
             raw_questions = interview_data.get("components", interview_data.get("questions", []))
         elif isinstance(interview_data, list):
@@ -533,12 +569,16 @@ def regenerate_template(
 
 # New route to serve generated files safely
 @router.get("/download/{filename}")
-def download_generated_file(filename: str):
+def download_generated_file(
+    filename: str,
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
+):
     if not re.match(r"^[\w\-. ]+\.(json|docx)$", filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "generated"))
-    file_path = os.path.abspath(os.path.join(base_dir, filename))
-    if not file_path.startswith(base_dir + os.sep):
+    templates_dir = get_templates_dir(request)
+    file_path = os.path.abspath(os.path.join(str(templates_dir), filename))
+    if not file_path.startswith(str(templates_dir.resolve()) + os.sep):
         raise HTTPException(status_code=400, detail="Invalid path")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")

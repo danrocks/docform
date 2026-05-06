@@ -4,8 +4,8 @@
   "type": "object",  
   "required": ["document", "interview"],  
   "properties": {  
-    "document":       { "type": "string", "format": "url", "description": "Download path for .docx template created in session" },
-    "interview":      { "type": "string", "format": "url", "description": "Download .json file  created in session" },
+    "document":       { "type": "string", "format": "url", "description": "Download URL for the generated .docx file" },
+    "interview":      { "type": "string", "format": "url", "description": "Download URL for the interview JSON file" },
     "summary":        { "type": "string", "description": "Brief description of what was created" },  
     "placeholderCount": { "type": "integer", "minimum": 1, "description": "Number of unique placeholders" }  
   },  
