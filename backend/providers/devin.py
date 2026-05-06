@@ -83,16 +83,12 @@ USER REQUEST:
 """  
   
     def _structured_schema(self) -> dict:  
-        return {  
-            "type": "object",  
-            "required": ["document", "interview"],  
-            "properties": {  
-                "document": {"type": "string", "description": "Download URL for the generated .docx file"},  
-                "interview": {"type": "string", "description": "Download URL for the interview JSON file"},  
-                "summary": {"type": "string", "description": "Brief description of what was created"},  
-                "placeholderCount": {"type": "integer", "minimum": 1, "description": "Number of unique placeholders"},  
-            },  
-        }  
+        schema_path = Path(__file__).resolve().parent.parent / "schema" / "AiResponseSchemaFile.json"
+        schema = json.loads(schema_path.read_text())
+        schema.pop("$schema", None)
+        schema.pop("title", None)
+        schema.pop("additionalProperties", None)
+        return schema  
   
     def _save_output(self, structured_output: dict, tenant_id: str = None) -> dict:  
         """Persist raw Devin response JSON to TEMPLATES_DATA for audit."""  
