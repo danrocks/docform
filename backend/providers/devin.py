@@ -109,17 +109,15 @@ USER REQUEST:
             print(f"Warning: failed to save Devin raw response: {e}")  
     
         return structured_output
-  
+
     def call(self, prompt: str, *, mode: str = "document", tenant_id: str = None, **kwargs) -> Dict[str, Any]:  
-        """Sync fallback — runs the async implementation in an event loop."""  
+        """Sync fallback -- runs the async implementation in an event loop."""  
         try:  
             loop = asyncio.get_running_loop()  
         except RuntimeError:  
             loop = None  
   
         if loop and loop.is_running():  
-            # We're inside an async context; can't use asyncio.run().  
-            # Caller should use acall() instead.  
             import concurrent.futures  
             with concurrent.futures.ThreadPoolExecutor() as pool:  
                 return pool.submit(asyncio.run, self.acall(prompt, mode=mode, tenant_id=tenant_id, **kwargs)).result()  
@@ -127,7 +125,7 @@ USER REQUEST:
             return asyncio.run(self.acall(prompt, mode=mode, tenant_id=tenant_id, **kwargs))  
   
     async def acall(self, prompt: str, *, mode: str = "document", tenant_id: str = None, **kwargs) -> Dict[str, Any]:  
-        """Native async implementation — polls Devin session without blocking the event loop."""  
+        """Native async implementation -- polls Devin session without blocking the event loop."""  
         api_key = self._get_api_key()  
         system_prompt = self._get_system_prompt()  
         session_prompt = self._build_session_prompt(prompt, system_prompt)  
@@ -138,7 +136,6 @@ USER REQUEST:
         }  
   
         print(repr(prompt))
-
         print(repr(session_prompt))
 
         # 1. Create the session  
@@ -162,7 +159,7 @@ USER REQUEST:
         session_id = create_resp.json()["session_id"]  
         print(f"Devin session created: {session_id}")  
   
-        # 2. Poll until finished (non-blocking)  
+        # 2. Poll until finished or structured_output available
         elapsed = 0  
         status_data = None  
         unblock_attempts = 0
@@ -174,7 +171,7 @@ USER REQUEST:
                 elapsed += self.POLL_INTERVAL  
   
                 status_resp = await client.get(  
-                    f"{self.DEVIN_API_BASE}/session/{session_id}",  
+                    f"{self.DEVIN_API_BASE}/sessions/{session_id}",  
                     headers=headers,  
                 )  
                 if status_resp.status_code != 200:  
@@ -182,14 +179,19 @@ USER REQUEST:
                     continue  
   
                 status_data = status_resp.json()
-                print(status_data) 
                 status = status_data.get("status_enum")  
                 print(f"Devin session {session_id}: {status} ({elapsed}s)")  
-  
+
+                # Check structured_output on every poll -- exit early if available
+                so = status_data.get("structured_output")
+                if so:
+                    print(f"Devin session {session_id}: structured_output available (status={status})")
+                    break
+
                 if status == "finished":  
                     print("Devin call finished successfully")
                     break  
-                elif status in ("stopped", "failed"):
+                elif status in ("stopped", "failed", "expired"):
                     raise HTTPException(
                         status_code=502,
                         detail=f"Devin session {status}: {status_data.get('error', 'unknown')}",
@@ -203,7 +205,7 @@ USER REQUEST:
                         )
                     try:
                         await client.post(
-                            f"{self.DEVIN_API_BASE}/session/{session_id}/message",
+                            f"{self.DEVIN_API_BASE}/sessions/{session_id}/message",
                             headers=headers,
                             json={"message": "Do not wait for user input. Continue autonomously. Complete the task and provide the structured output with base64-encoded files."},
                         )
@@ -230,4 +232,3 @@ USER REQUEST:
   
         # 4. Save artifacts  
         return self._save_output(structured_output, tenant_id=tenant_id)
-    
