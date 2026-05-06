@@ -145,7 +145,7 @@ USER REQUEST:
                 headers=headers,  
                 json={  
                     "prompt": session_prompt,  
-                    "structured_output": {"schema": self._structured_schema()},  
+                    "structured_output_schema": self._structured_schema(),  
                 },  
             )  
   
