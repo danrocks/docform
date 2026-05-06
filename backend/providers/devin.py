@@ -68,13 +68,24 @@ The web page includes detailed instructions and examples for how to format the d
 Follow any links in the instructions to get schema details. 
 
 OUTPUT FORMAT:
-Return your results via structured_output as a JSON object with:
-- "document": the .docx file content, base64-encoded (use base64.b64encode(open("file.docx","rb").read()).decode())
-- "interview": the interview JSON file content, base64-encoded (use base64.b64encode(open("file.json","rb").read()).decode())
-- "summary": brief description of what was created
-- "placeholderCount": number of unique placeholders
+When both files are ready, you MUST update the structured output with a JSON object.
+The "document" and "interview" values must be the ACTUAL base64-encoded file contents
+as raw strings — NOT file paths, NOT URLs, NOT file:/// references.
 
-Do NOT return URLs. Return the actual file content as base64 strings.
+To produce the values, run this Python code and use the printed strings directly:
+  import base64
+  doc_b64 = base64.b64encode(open("your_file.docx", "rb").read()).decode()
+  int_b64 = base64.b64encode(open("your_file.json", "rb").read()).decode()
+
+Then update the structured output with:
+  "document": <the full doc_b64 string, which will be tens of thousands of characters>,
+  "interview": <the full int_b64 string>,
+  "summary": brief description of what was created,
+  "placeholderCount": number of unique placeholders
+
+CRITICAL: The document and interview values must each be long base64 strings
+(typically 20,000+ characters). If your values are short or contain "file://",
+"/home/", or any path, you have done it wrong — go back and encode the actual file bytes.
   
 USER REQUEST:  
 {prompt}  
@@ -185,8 +196,23 @@ USER REQUEST:
                 # Check structured_output on every poll -- exit early if available
                 so = status_data.get("structured_output")
                 if so:
-                    print(f"Devin session {session_id}: structured_output available (status={status})")
-                    break
+                    so_obj = json.loads(so) if isinstance(so, str) else so
+                    doc_val = so_obj.get("document", "") if isinstance(so_obj, dict) else ""
+                    # Reject if values are file paths instead of actual base64
+                    if doc_val and not doc_val.startswith(("file:", "/", "http")):
+                        print(f"Devin session {session_id}: structured_output available (status={status})")
+                        break
+                    else:
+                        print(f"Devin session {session_id}: structured_output has paths, not base64 — sending correction")
+                        try:
+                            await client.post(
+                                f"{self.DEVIN_API_BASE}/sessions/{session_id}/message",
+                                headers=headers,
+                                json={"message": "The structured output document/interview values contain file paths, not actual base64 content. Read the file bytes with Python: base64.b64encode(open('file.docx','rb').read()).decode() and update structured output with the resulting string."},
+                            )
+                        except Exception:
+                            pass
+                        so = None
 
                 if status == "finished":  
                     print("Devin call finished successfully")
