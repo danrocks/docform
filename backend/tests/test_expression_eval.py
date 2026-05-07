@@ -444,3 +444,82 @@ def test_validate_questions_accepts_valid_expression():
     ]
     # Should not raise.
     validate_questions(components)
+
+
+def test_validate_questions_rejects_expression_inside_repeat():
+    # Expressions on number fields inside a repeat group are unsupported and
+    # must be rejected at schema-validation time so authors get a clear error
+    # rather than silently-broken or unvalidated submissions.
+    components = [
+        {
+            "type": "repeat", "id": "items", "label": "Items",
+            "components": [
+                {"type": "number", "id": "qty", "label": "Qty"},
+                {"type": "number", "id": "unit_price", "label": "Unit Price"},
+                {"type": "number", "id": "row_total", "label": "Row total",
+                 "expression": "qty * unit_price"},
+            ],
+        },
+    ]
+    with pytest.raises(
+        ValueError, match="not supported on number components inside a repeat group"
+    ):
+        validate_questions(components)
+
+
+def test_validate_questions_rejects_expression_inside_nested_repeat_via_dialog():
+    # Dialogs are transparent containers, but if a dialog is *inside* a repeat
+    # any expression on a number child should still be rejected.
+    components = [
+        {
+            "type": "repeat", "id": "groups", "label": "Groups",
+            "components": [
+                {
+                    "type": "dialog", "id": "row_dialog", "title": "Row",
+                    "components": [
+                        {"type": "number", "id": "x", "label": "X"},
+                        {"type": "number", "id": "doubled", "label": "Doubled",
+                         "expression": "x * 2"},
+                    ],
+                },
+            ],
+        },
+    ]
+    with pytest.raises(
+        ValueError, match="not supported on number components inside a repeat group"
+    ):
+        validate_questions(components)
+
+
+def test_validate_questions_allows_expression_inside_top_level_dialog():
+    components = [
+        {"type": "number", "id": "a", "label": "A"},
+        {
+            "type": "dialog", "id": "totals", "title": "Totals",
+            "components": [
+                {"type": "number", "id": "doubled", "label": "Doubled",
+                 "expression": "a * 2"},
+            ],
+        },
+    ]
+    # Should not raise — dialog at top level is transparent.
+    validate_questions(components)
+
+
+def test_repeat_child_with_non_numeric_value_is_rejected_post_fix():
+    # Even if a malicious schema somehow reached `validate_submission_data`
+    # with `expression` on a repeat-child number field, the defense-in-depth
+    # `inside_repeat` flag in `_validate_component` falls back to normal
+    # number validation and rejects non-numeric input.
+    from question_schema import _validate_component
+    comp = {
+        "type": "number", "id": "row_total", "label": "Row total",
+        "expression": "qty * unit_price",
+    }
+    errors: list = []
+    validated: dict = {}
+    _validate_component(
+        comp, {"row_total": "not-a-number"}, validated, errors, inside_repeat=True
+    )
+    assert errors  # rejected
+    assert "row_total" not in validated

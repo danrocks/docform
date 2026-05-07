@@ -53,7 +53,11 @@ def _collect_expression_components(
             )
 
 
-def validate_questions(components: list) -> list:
+def validate_questions(
+    components: list,
+    _inside_repeat: bool = False,
+    _all_ids: set | None = None,
+) -> list:
     """Validate a list of InterviewSchema components (recursive).
 
     Ensures each component has a valid type, unique id, and the fields required
@@ -63,8 +67,12 @@ def validate_questions(components: list) -> list:
     if not isinstance(components, list):
         raise ValueError("Components must be a list")
 
-    all_ids: set = set()
-    _collect_component_ids(components, all_ids)
+    # Collect every id in the full tree once at the top-level call so that
+    # nested expression validation can reference outer fields (e.g. a number
+    # inside a top-level dialog referencing a sibling outside that dialog).
+    if _all_ids is None:
+        _all_ids = set()
+        _collect_component_ids(components, _all_ids)
 
     validated: list = []
     seen_ids: set = set()
@@ -109,16 +117,30 @@ def validate_questions(components: list) -> list:
                         f"Component '{cid}': each option must have 'value' and 'label'"
                     )
 
-        if ctype in ("repeat", "dialog"):
+        if ctype == "repeat":
             nested = comp.get("components", [])
             if not isinstance(nested, list) or len(nested) == 0:
                 raise ValueError(
-                    f"Component '{cid}': {ctype} type requires a non-empty 'components' array"
+                    f"Component '{cid}': repeat type requires a non-empty 'components' array"
                 )
-            validate_questions(nested)
+            validate_questions(nested, _inside_repeat=True, _all_ids=_all_ids)
+        elif ctype == "dialog":
+            nested = comp.get("components", [])
+            if not isinstance(nested, list) or len(nested) == 0:
+                raise ValueError(
+                    f"Component '{cid}': dialog type requires a non-empty 'components' array"
+                )
+            validate_questions(
+                nested, _inside_repeat=_inside_repeat, _all_ids=_all_ids
+            )
 
         if ctype == "number" and comp.get("expression"):
-            expr_errors = validate_expression_syntax(comp["expression"], all_ids)
+            if _inside_repeat:
+                raise ValueError(
+                    f"Component '{cid}': 'expression' is not supported on number "
+                    f"components inside a repeat group"
+                )
+            expr_errors = validate_expression_syntax(comp["expression"], _all_ids)
             if expr_errors:
                 raise ValueError(
                     f"Component '{cid}': invalid expression — {'; '.join(expr_errors)}"
@@ -278,20 +300,30 @@ def _is_empty(value: Any) -> bool:
     return False
 
 
-def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -> None:
+def _validate_component(
+    comp: dict,
+    data: dict,
+    validated: dict,
+    errors: list,
+    inside_repeat: bool = False,
+) -> None:
     ctype = comp.get("type")
     cid = comp.get("id")
     required = comp.get("required", False)
 
-    # Computed number fields are derived server-side; skip all client-value
-    # validation (required, min/max, decimalPlaces). The actual value is set
-    # later by `_recompute_expressions`.
-    if ctype == "number" and comp.get("expression"):
+    # Top-level computed number fields are derived server-side; skip all
+    # client-value validation (required, min/max, decimalPlaces). The actual
+    # value is set later by `_recompute_expressions`. Inside repeats this
+    # is rejected at schema-validation time, but we re-check here as a
+    # defense-in-depth measure: any expression-bearing field that slips
+    # through inside a repeat falls back to normal number validation so
+    # arbitrary client values cannot pass through unvalidated.
+    if ctype == "number" and comp.get("expression") and not inside_repeat:
         return
 
     if ctype == "dialog":
         for nested in comp.get("components", []):
-            _validate_component(nested, data, validated, errors)
+            _validate_component(nested, data, validated, errors, inside_repeat)
         return
 
     if ctype == "repeat":
@@ -324,7 +356,9 @@ def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -
             item_validated: dict = {}
             item_errors: list = []
             for nested in nested_components:
-                _validate_component(nested, item, item_validated, item_errors)
+                _validate_component(
+                    nested, item, item_validated, item_errors, inside_repeat=True
+                )
             if item_errors:
                 for e in item_errors:
                     errors.append(f"{_label_for(comp)}[{idx + 1}]: {e}")

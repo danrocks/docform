@@ -59,13 +59,25 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
   const [errors, setErrors] = useState({})
 
   // Recompute any number components with `expression` whenever data changes,
-  // so the displayed/submitted value tracks its inputs in real time. Only
-  // dispatch onDataChange when the value actually changes to avoid loops.
+  // so the displayed/submitted value tracks its inputs in real time. We
+  // mirror the backend's `_recompute_expressions`: build a local copy of
+  // `data` and update each computed field in it as we go, so chained
+  // expressions (e.g. total = subtotal + vat where vat itself is computed)
+  // see the latest values of earlier fields in the same pass instead of a
+  // stale snapshot. Only dispatch onDataChange for fields whose value
+  // actually changed to avoid render loops.
   useEffect(() => {
     const fields = collectExpressionFields(template.fields || [])
+    if (fields.length === 0) return
+    const local = { ...data }
     for (const f of fields) {
-      const computed = evaluateExpression(f.expression, data)
+      const computed = evaluateExpression(f.expression, local)
       if (computed === null) continue
+      local[f.id] = computed
+    }
+    for (const f of fields) {
+      const computed = local[f.id]
+      if (typeof computed !== 'number' || !Number.isFinite(computed)) continue
       const current = data[f.id]
       const currentNum = typeof current === 'number' ? current : parseFloat(current)
       if (Number.isNaN(currentNum) || currentNum !== computed) {
