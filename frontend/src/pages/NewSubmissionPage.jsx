@@ -80,15 +80,23 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
     for (const f of fields) {
       const computed = evaluateExpression(f.expression, local)
       if (computed === null) continue
-      local[f.id] = computed
+      // Mirror the backend's `_recompute_expressions` rounding: chained
+      // expressions must see the *rounded* intermediate value, otherwise
+      // the displayed total can disagree with what the server stores
+      // (e.g. b = round(10/3, 2) = 3.33 then c = b*3 = 9.99 on the
+      // backend but 10.0 on the frontend without this rounding).
+      const dp = f.decimalPlaces
+      local[f.id] = dp != null ? parseFloat(computed.toFixed(dp)) : computed
     }
     for (const f of fields) {
       const recomputed = evaluateExpression(f.expression, local)
       if (recomputed === null) continue
+      const dp = f.decimalPlaces
+      const rounded = dp != null ? parseFloat(recomputed.toFixed(dp)) : recomputed
       if (
-        typeof recomputed === 'number' &&
-        Number.isFinite(recomputed) &&
-        local[f.id] !== recomputed
+        typeof rounded === 'number' &&
+        Number.isFinite(rounded) &&
+        local[f.id] !== rounded
       ) {
         // Non-converging: don't dispatch.
         return
