@@ -295,3 +295,152 @@ def test_total_with_vat_scenario():
 )
 def test_parametrized_arithmetic(expr, data, expected):
     assert evaluate_expression(expr, data) == expected
+
+
+# ---------------------------------------------------------------------------
+# Integration with question_schema (validate_submission_data + recompute)
+# ---------------------------------------------------------------------------
+
+from question_schema import validate_questions, validate_submission_data  # noqa: E402
+
+
+def test_submission_recomputes_total_from_repeat_group():
+    components = [
+        {
+            "type": "repeat", "id": "items", "label": "Line Items",
+            "components": [
+                {"type": "number", "id": "qty", "label": "Qty"},
+                {"type": "number", "id": "unit_price", "label": "Unit Price"},
+            ],
+        },
+        {
+            "type": "number", "id": "total", "label": "Total",
+            "expression": "sum(items.qty * items.unit_price)",
+            "decimalPlaces": 2,
+        },
+    ]
+    data = {
+        "items": [{"qty": 2, "unit_price": 50}, {"qty": 1, "unit_price": 25}],
+        "total": 999,  # client-submitted value (should be overwritten)
+    }
+    result = validate_submission_data(components, data)
+    assert result["total"] == 125.0
+
+
+def test_submission_chained_expressions():
+    components = [
+        {"type": "number", "id": "subtotal", "label": "Subtotal"},
+        {"type": "number", "id": "vat", "label": "VAT",
+         "expression": "subtotal * 0.2", "decimalPlaces": 2},
+        {"type": "number", "id": "total", "label": "Total",
+         "expression": "subtotal + vat", "decimalPlaces": 2},
+    ]
+    result = validate_submission_data(components, {"subtotal": 100})
+    assert result["vat"] == 20.0
+    assert result["total"] == 120.0
+
+
+def test_submission_skips_validation_for_computed_field():
+    # Computed field with required:true would normally fail because no value
+    # is submitted. The skip should let it through and recompute correctly.
+    components = [
+        {"type": "number", "id": "a", "label": "A"},
+        {"type": "number", "id": "b", "label": "B"},
+        {
+            "type": "number", "id": "total", "label": "Total",
+            "expression": "a + b",
+            "required": True,
+            "decimalPlaces": 2,
+        },
+    ]
+    result = validate_submission_data(components, {"a": 10, "b": 5})
+    assert result["total"] == 15.0
+
+
+def test_submission_ignores_floating_point_decimal_places_on_computed():
+    # 7 * 0.1 = 0.7000000000000001 in IEEE-754. Without skipping number
+    # validation for computed fields the decimalPlaces check would reject
+    # the recomputed value. With the skip the field round-trips cleanly.
+    components = [
+        {"type": "number", "id": "a", "label": "A"},
+        {
+            "type": "number", "id": "tenths", "label": "Tenths",
+            "expression": "a * 0.1",
+            "decimalPlaces": 2,
+        },
+    ]
+    result = validate_submission_data(components, {"a": 7})
+    assert result["tenths"] == 0.7
+
+
+def test_submission_ignores_min_max_on_computed():
+    # min/max on a computed field should not block submission if the inputs
+    # produce an out-of-range value — the field is derived.
+    components = [
+        {"type": "number", "id": "a", "label": "A"},
+        {
+            "type": "number", "id": "doubled", "label": "Doubled",
+            "expression": "a * 2",
+            "max": 5,  # would normally reject 20 but it's a computed field
+        },
+    ]
+    result = validate_submission_data(components, {"a": 10})
+    assert result["doubled"] == 20.0
+
+
+def test_recompute_skips_repeat_children():
+    # An `expression` on a number field inside a repeat group should NOT be
+    # collected at the top level (the references inside the expression don't
+    # mean the same thing per-row vs. globally). The repeat-child computed
+    # field is left untouched by `_recompute_expressions`.
+    components = [
+        {
+            "type": "repeat", "id": "items", "label": "Items",
+            "components": [
+                {"type": "number", "id": "qty", "label": "Qty"},
+                {"type": "number", "id": "unit_price", "label": "Unit Price"},
+                # This per-row computed field is NOT supported and must be
+                # ignored by the top-level recompute step.
+                {
+                    "type": "number", "id": "row_total", "label": "Row total",
+                    "expression": "qty * unit_price",
+                },
+            ],
+        },
+    ]
+    result = validate_submission_data(
+        components,
+        {"items": [{"qty": 2, "unit_price": 50, "row_total": 100}]},
+    )
+    # No phantom top-level "row_total" was written.
+    assert "row_total" not in result
+    # The submitted per-row value is preserved verbatim.
+    assert result["items"][0]["row_total"] == 100
+
+
+def test_validate_questions_rejects_invalid_expression_field():
+    components = [
+        {"type": "number", "id": "total", "label": "Total",
+         "expression": "sum(unknown.x)"},
+    ]
+    with pytest.raises(ValueError, match="Unknown field reference"):
+        validate_questions(components)
+
+
+def test_validate_questions_rejects_parse_error():
+    components = [
+        {"type": "number", "id": "total", "label": "Total", "expression": "1 +"},
+    ]
+    with pytest.raises(ValueError, match="invalid expression"):
+        validate_questions(components)
+
+
+def test_validate_questions_accepts_valid_expression():
+    components = [
+        {"type": "repeat", "id": "items", "label": "Line Items",
+         "components": [{"type": "number", "id": "price", "label": "Price"}]},
+        {"type": "number", "id": "total", "label": "Total",
+         "expression": "sum(items.price)", "decimalPlaces": 2},
+    ]
+    # Should not raise.
+    validate_questions(components)

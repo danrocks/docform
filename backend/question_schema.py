@@ -30,18 +30,27 @@ def _collect_component_ids(components: list, ids: set) -> None:
             _collect_component_ids(comp.get("components", []), ids)
 
 
-def _collect_expression_components(components: list, out: list) -> None:
-    """Walk the component tree and collect (component, label) for each
-    number component that has an `expression` property."""
+def _collect_expression_components(
+    components: list, out: list, inside_repeat: bool = False
+) -> None:
+    """Walk the component tree and collect each number component that has an
+    `expression` property. Components inside `repeat` groups are skipped — they
+    cannot be evaluated against the top-level form data and per-row computed
+    fields are not currently supported."""
     if not isinstance(components, list):
         return
     for comp in components:
         if not isinstance(comp, dict):
             continue
-        if comp.get("type") == "number" and comp.get("expression"):
+        ctype = comp.get("type")
+        if ctype == "number" and comp.get("expression") and not inside_repeat:
             out.append(comp)
-        if comp.get("type") in ("repeat", "dialog"):
-            _collect_expression_components(comp.get("components", []), out)
+        if ctype == "repeat":
+            _collect_expression_components(comp.get("components", []), out, True)
+        elif ctype == "dialog":
+            _collect_expression_components(
+                comp.get("components", []), out, inside_repeat
+            )
 
 
 def validate_questions(components: list) -> list:
@@ -273,6 +282,12 @@ def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -
     ctype = comp.get("type")
     cid = comp.get("id")
     required = comp.get("required", False)
+
+    # Computed number fields are derived server-side; skip all client-value
+    # validation (required, min/max, decimalPlaces). The actual value is set
+    # later by `_recompute_expressions`.
+    if ctype == "number" and comp.get("expression"):
+        return
 
     if ctype == "dialog":
         for nested in comp.get("components", []):
