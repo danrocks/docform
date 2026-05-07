@@ -1,0 +1,297 @@
+"""Tests for expression_eval (Python expression parser/evaluator)."""
+
+import pytest
+
+from expression_eval import (
+    evaluate_expression,
+    validate_expression_syntax,
+)
+
+
+# ---------------------------------------------------------------------------
+# Basic arithmetic
+# ---------------------------------------------------------------------------
+
+def test_arithmetic_addition():
+    assert evaluate_expression("1 + 2", {}) == 3.0
+
+
+def test_arithmetic_subtraction():
+    assert evaluate_expression("10 - 4", {}) == 6.0
+
+
+def test_arithmetic_multiplication():
+    assert evaluate_expression("3 * 4", {}) == 12.0
+
+
+def test_arithmetic_division():
+    assert evaluate_expression("10 / 4", {}) == 2.5
+
+
+def test_arithmetic_division_truncated():
+    # 10 / 3 = 3.333...
+    result = evaluate_expression("10 / 3", {})
+    assert result is not None
+    assert abs(result - (10 / 3)) < 1e-9
+
+
+def test_operator_precedence():
+    assert evaluate_expression("2 + 3 * 4", {}) == 14.0
+    assert evaluate_expression("(2 + 3) * 4", {}) == 20.0
+    assert evaluate_expression("20 / 4 / 5", {}) == 1.0
+
+
+def test_unary_negation():
+    assert evaluate_expression("-5", {}) == -5.0
+    assert evaluate_expression("-(2 + 3)", {}) == -5.0
+    assert evaluate_expression("10 + -3", {}) == 7.0
+
+
+def test_decimal_literals():
+    assert evaluate_expression("0.2", {}) == 0.2
+    assert evaluate_expression(".5 + .5", {}) == 1.0
+    assert evaluate_expression("100 * 0.2", {}) == 20.0
+
+
+# ---------------------------------------------------------------------------
+# Field references
+# ---------------------------------------------------------------------------
+
+def test_field_reference_resolves_value():
+    assert evaluate_expression("price", {"price": 42}) == 42.0
+
+
+def test_field_reference_missing_is_zero():
+    assert evaluate_expression("price", {}) == 0.0
+
+
+def test_field_reference_string_numeric_coerced():
+    assert evaluate_expression("price * 2", {"price": "10.5"}) == 21.0
+
+
+def test_field_reference_non_numeric_treated_as_zero():
+    assert evaluate_expression("price + 5", {"price": "abc"}) == 5.0
+
+
+def test_cross_field_addition():
+    data = {"subtotal": 100, "vat_amount": 20}
+    assert evaluate_expression("subtotal + vat_amount", data) == 120.0
+
+
+# ---------------------------------------------------------------------------
+# Repeat group references + aggregates
+# ---------------------------------------------------------------------------
+
+def test_sum_repeat_group_field():
+    data = {"items": [{"price": 10}, {"price": 20}]}
+    assert evaluate_expression("sum(items.price)", data) == 30.0
+
+
+def test_count_repeat_group_field():
+    data = {"items": [{"price": 10}, {"price": 20}, {"price": 30}]}
+    assert evaluate_expression("count(items.price)", data) == 3.0
+
+
+def test_count_repeat_group_alone():
+    data = {"items": [{"price": 10}, {"price": 20}, {"price": 30}]}
+    assert evaluate_expression("count(items)", data) == 3.0
+
+
+def test_avg_repeat_group_field():
+    data = {"items": [{"score": 10}, {"score": 20}, {"score": 30}]}
+    assert evaluate_expression("avg(items.score)", data) == 20.0
+
+
+def test_min_repeat_group_field():
+    data = {"items": [{"v": 7}, {"v": 3}, {"v": 9}]}
+    assert evaluate_expression("min(items.v)", data) == 3.0
+
+
+def test_max_repeat_group_field():
+    data = {"items": [{"v": 7}, {"v": 3}, {"v": 9}]}
+    assert evaluate_expression("max(items.v)", data) == 9.0
+
+
+# ---------------------------------------------------------------------------
+# Element-wise arithmetic
+# ---------------------------------------------------------------------------
+
+def test_element_wise_multiplication():
+    data = {
+        "items": [
+            {"quantity": 2, "unit_price": 5},
+            {"quantity": 3, "unit_price": 4},
+        ]
+    }
+    # (2*5) + (3*4) = 22
+    assert evaluate_expression("sum(items.quantity * items.unit_price)", data) == 22.0
+
+
+def test_element_wise_with_scalar():
+    data = {"items": [{"price": 10}, {"price": 20}]}
+    # sum(items.price * 2) = 60
+    assert evaluate_expression("sum(items.price * 2)", data) == 60.0
+
+
+def test_element_wise_subtraction():
+    data = {
+        "items": [
+            {"gross": 100, "discount": 10},
+            {"gross": 50, "discount": 5},
+        ]
+    }
+    assert evaluate_expression("sum(items.gross - items.discount)", data) == 135.0
+
+
+# ---------------------------------------------------------------------------
+# Nested expressions
+# ---------------------------------------------------------------------------
+
+def test_nested_expression_with_outer_arithmetic():
+    data = {"items": [{"subtotal": 100}, {"subtotal": 50}]}
+    # sum(items.subtotal) * 0.2 = 30
+    assert evaluate_expression("sum(items.subtotal) * 0.2", data) == 30.0
+
+
+def test_combined_field_and_aggregate():
+    data = {
+        "subtotal": 100,
+        "items": [{"price": 10}, {"price": 20}],
+    }
+    assert evaluate_expression("subtotal + sum(items.price)", data) == 130.0
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+def test_empty_array_aggregates_return_zero():
+    data = {"items": []}
+    assert evaluate_expression("sum(items.price)", data) == 0.0
+    assert evaluate_expression("avg(items.price)", data) == 0.0
+    assert evaluate_expression("min(items.price)", data) == 0.0
+    assert evaluate_expression("max(items.price)", data) == 0.0
+    assert evaluate_expression("count(items.price)", data) == 0.0
+
+
+def test_missing_repeat_group_returns_zero():
+    assert evaluate_expression("sum(items.price)", {}) == 0.0
+    assert evaluate_expression("count(items)", {}) == 0.0
+
+
+def test_division_by_zero():
+    assert evaluate_expression("10 / 0", {}) == 0.0
+    assert evaluate_expression("10 / x", {}) == 0.0
+    assert evaluate_expression("10 / x", {"x": 0}) == 0.0
+
+
+def test_missing_nested_field_treated_as_zero():
+    data = {"items": [{"price": 10}, {}, {"price": 20}]}
+    assert evaluate_expression("sum(items.price)", data) == 30.0
+
+
+def test_invalid_expression_returns_none():
+    assert evaluate_expression("1 +", {}) is None
+    assert evaluate_expression("(", {}) is None
+    assert evaluate_expression("foo(bar)", {}) is None  # unknown function
+
+
+def test_empty_or_non_string_expression_returns_none():
+    assert evaluate_expression("", {}) is None
+    assert evaluate_expression("   ", {}) is None
+
+
+def test_data_not_dict_treated_as_empty():
+    assert evaluate_expression("price", None) == 0.0  # type: ignore[arg-type]
+
+
+def test_array_top_level_collapses_to_sum():
+    data = {"items": [{"price": 10}, {"price": 20}]}
+    # No aggregate wrapper: collapse to sum so we still return a number
+    assert evaluate_expression("items.price", data) == 30.0
+
+
+def test_negation_of_array():
+    data = {"items": [{"v": 1}, {"v": 2}]}
+    # -items.v -> [-1, -2], collapsed to sum -> -3
+    assert evaluate_expression("-items.v", data) == -3.0
+
+
+# ---------------------------------------------------------------------------
+# Syntax validation
+# ---------------------------------------------------------------------------
+
+def test_validate_expression_syntax_valid():
+    errors = validate_expression_syntax(
+        "sum(items.price) + tax", {"items", "tax", "price"}
+    )
+    assert errors == []
+
+
+def test_validate_expression_syntax_unknown_field():
+    errors = validate_expression_syntax(
+        "sum(unknown_field.price)", {"items"}
+    )
+    assert len(errors) == 1
+    assert "unknown_field" in errors[0]
+
+
+def test_validate_expression_syntax_parse_error():
+    errors = validate_expression_syntax("1 +", {"items"})
+    assert len(errors) >= 1
+
+
+def test_validate_expression_syntax_unknown_function():
+    errors = validate_expression_syntax("foo(bar)", {"bar"})
+    assert len(errors) >= 1
+
+
+def test_validate_expression_syntax_empty():
+    errors = validate_expression_syntax("", {"items"})
+    assert len(errors) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Realistic end-to-end-ish scenarios
+# ---------------------------------------------------------------------------
+
+def test_invoice_total_scenario():
+    data = {
+        "line_items": [
+            {"quantity": 2, "unit_price": 50},
+            {"quantity": 1, "unit_price": 25},
+        ],
+    }
+    subtotal = evaluate_expression(
+        "sum(line_items.quantity * line_items.unit_price)", data
+    )
+    assert subtotal == 125.0
+
+
+def test_total_with_vat_scenario():
+    data = {
+        "line_items": [
+            {"quantity": 2, "unit_price": 50},
+            {"quantity": 1, "unit_price": 25},
+        ],
+    }
+    expr = (
+        "sum(line_items.quantity * line_items.unit_price) "
+        "+ sum(line_items.quantity * line_items.unit_price) * 0.2"
+    )
+    assert evaluate_expression(expr, data) == 150.0
+
+
+@pytest.mark.parametrize(
+    "expr,data,expected",
+    [
+        ("1 + 2 + 3", {}, 6.0),
+        ("2 * 3 + 4", {}, 10.0),
+        ("2 * (3 + 4)", {}, 14.0),
+        ("100 - 50 - 25", {}, 25.0),
+        ("100 - (50 - 25)", {}, 75.0),
+        ("price + tax", {"price": 100, "tax": 20}, 120.0),
+    ],
+)
+def test_parametrized_arithmetic(expr, data, expected):
+    assert evaluate_expression(expr, data) == expected

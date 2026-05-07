@@ -3,6 +3,30 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
 import { FileText, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react'
+import { evaluateExpression } from '../expressionEval'
+
+// Walk a component tree (including dialog/repeat children) and yield every
+// `number` component that has an `expression` property. Repeat children are
+// excluded — their per-row values are derived from the row's own data, not
+// the top-level form data, and we don't currently support per-row computed
+// fields.
+function collectExpressionFields(components) {
+  const out = []
+  const walk = (list, insideRepeat) => {
+    for (const c of list || []) {
+      if (!c) continue
+      if (c.type === 'dialog') {
+        walk(c.components || [], insideRepeat)
+      } else if (c.type === 'repeat') {
+        walk(c.components || [], true)
+      } else if (c.type === 'number' && c.expression && !insideRepeat) {
+        out.push(c)
+      }
+    }
+  }
+  walk(components, false)
+  return out
+}
 
 // Step 1: pick a template
 function PickTemplate({ templates, onSelect }) {
@@ -33,6 +57,22 @@ function PickTemplate({ templates, onSelect }) {
 // Step 2: complete interview
 function FillForm({ template, data, context, onDataChange, onContextChange, onBack, onSubmit, submitting }) {
   const [errors, setErrors] = useState({})
+
+  // Recompute any number components with `expression` whenever data changes,
+  // so the displayed/submitted value tracks its inputs in real time. Only
+  // dispatch onDataChange when the value actually changes to avoid loops.
+  useEffect(() => {
+    const fields = collectExpressionFields(template.fields || [])
+    for (const f of fields) {
+      const computed = evaluateExpression(f.expression, data)
+      if (computed === null) continue
+      const current = data[f.id]
+      const currentNum = typeof current === 'number' ? current : parseFloat(current)
+      if (Number.isNaN(currentNum) || currentNum !== computed) {
+        onDataChange(f.id, computed)
+      }
+    }
+  }, [data, template, onDataChange])
 
   const isEmpty = v => v == null || (typeof v === 'string' && v.trim() === '')
 
@@ -91,6 +131,8 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
         } catch { /* skip invalid regex */ }
       }
     } else if (field.type === 'number') {
+      // Computed fields are derived; skip validation entirely.
+      if (field.expression) return
       const n = parseFloat(val)
       if (isNaN(n)) errs[errKey] = 'Must be a valid number'
       else if (field.integerOnly && !Number.isInteger(n)) errs[errKey] = 'Must be a whole number'
@@ -165,17 +207,26 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
 
     if (field.type === 'number') {
       const step = field.step || (field.integerOnly ? 1 : field.decimalPlaces ? Math.pow(10, -field.decimalPlaces) : 'any')
+      const isComputed = !!field.expression
+      let displayValue = value ?? ''
+      if (isComputed && typeof value === 'number' && Number.isFinite(value)) {
+        displayValue = field.decimalPlaces != null
+          ? value.toFixed(field.decimalPlaces)
+          : String(value)
+      }
       return (
         <div className="flex items-center gap-2">
           {field.prefix && <span className="text-sm text-gray-500 font-medium">{field.prefix}</span>}
           {field.unit && !field.prefix && <span className="text-sm text-gray-500 font-medium">{field.unit}</span>}
-          <input type="number" id={field.id} value={value ?? ''}
+          <input type={isComputed ? 'text' : 'number'} id={field.id} value={displayValue}
             onChange={e => onChange(field.id, e.target.value)}
-            className={`input flex-1 ${err}`}
+            readOnly={isComputed}
+            tabIndex={isComputed ? -1 : undefined}
+            className={`input flex-1 ${err} ${isComputed ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''}`}
             placeholder={field.placeholder || ''}
-            min={field.min ?? undefined}
-            max={field.max ?? undefined}
-            step={step} />
+            min={isComputed ? undefined : (field.min ?? undefined)}
+            max={isComputed ? undefined : (field.max ?? undefined)}
+            step={isComputed ? undefined : step} />
           {field.suffix && <span className="text-sm text-gray-500 font-medium">{field.suffix}</span>}
         </div>
       )

@@ -11,7 +11,37 @@ import re
 from datetime import datetime
 from typing import Any
 
+from expression_eval import evaluate_expression, validate_expression_syntax
+
 VALID_TYPES = {"string", "number", "datetime", "choice", "repeat", "dialog"}
+
+
+def _collect_component_ids(components: list, ids: set) -> None:
+    """Recursively gather every component id from a tree."""
+    if not isinstance(components, list):
+        return
+    for comp in components:
+        if not isinstance(comp, dict):
+            continue
+        cid = comp.get("id")
+        if cid:
+            ids.add(cid)
+        if comp.get("type") in ("repeat", "dialog"):
+            _collect_component_ids(comp.get("components", []), ids)
+
+
+def _collect_expression_components(components: list, out: list) -> None:
+    """Walk the component tree and collect (component, label) for each
+    number component that has an `expression` property."""
+    if not isinstance(components, list):
+        return
+    for comp in components:
+        if not isinstance(comp, dict):
+            continue
+        if comp.get("type") == "number" and comp.get("expression"):
+            out.append(comp)
+        if comp.get("type") in ("repeat", "dialog"):
+            _collect_expression_components(comp.get("components", []), out)
 
 
 def validate_questions(components: list) -> list:
@@ -23,6 +53,9 @@ def validate_questions(components: list) -> list:
     """
     if not isinstance(components, list):
         raise ValueError("Components must be a list")
+
+    all_ids: set = set()
+    _collect_component_ids(components, all_ids)
 
     validated: list = []
     seen_ids: set = set()
@@ -74,6 +107,13 @@ def validate_questions(components: list) -> list:
                     f"Component '{cid}': {ctype} type requires a non-empty 'components' array"
                 )
             validate_questions(nested)
+
+        if ctype == "number" and comp.get("expression"):
+            expr_errors = validate_expression_syntax(comp["expression"], all_ids)
+            if expr_errors:
+                raise ValueError(
+                    f"Component '{cid}': invalid expression — {'; '.join(expr_errors)}"
+                )
 
         validated.append(comp)
 
@@ -315,6 +355,29 @@ def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -
         validated[cid] = result
 
 
+def _recompute_expressions(components: list, validated: dict) -> None:
+    """Overwrite computed `number` fields with server-side evaluations.
+
+    The client-submitted value for any number component with an `expression`
+    is replaced by re-evaluating the expression against `validated`. This
+    ensures the server is the source of truth for derived values.
+    """
+    expr_components: list = []
+    _collect_expression_components(components, expr_components)
+    for comp in expr_components:
+        cid = comp.get("id")
+        expression = comp.get("expression")
+        if not cid or not expression:
+            continue
+        result = evaluate_expression(expression, validated)
+        if result is None:
+            continue
+        decimal_places = comp.get("decimalPlaces")
+        if decimal_places is not None:
+            result = round(result, int(decimal_places))
+        validated[cid] = result
+
+
 def validate_submission_data(components: list, data: dict) -> dict:
     """Validate submitted interview answers against InterviewSchema components."""
     if not isinstance(data, dict):
@@ -332,5 +395,7 @@ def validate_submission_data(components: list, data: dict) -> dict:
     for k, v in data.items():
         if k not in validated:
             validated[k] = v
+
+    _recompute_expressions(components, validated)
 
     return validated
