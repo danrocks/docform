@@ -66,6 +66,13 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
   // see the latest values of earlier fields in the same pass instead of a
   // stale snapshot. Only dispatch onDataChange for fields whose value
   // actually changed to avoid render loops.
+  //
+  // Defense-in-depth against cycles: the backend rejects schemas with
+  // self-referential or mutually-referential computed fields, but if such a
+  // schema slipped through (e.g. `total + 1` for `total`), each pass would
+  // produce a different value and React would crash with "Maximum update
+  // depth exceeded". Run a second pass against `local`; if the values don't
+  // converge, bail out instead of dispatching.
   useEffect(() => {
     const fields = collectExpressionFields(template.fields || [])
     if (fields.length === 0) return
@@ -74,6 +81,18 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
       const computed = evaluateExpression(f.expression, local)
       if (computed === null) continue
       local[f.id] = computed
+    }
+    for (const f of fields) {
+      const recomputed = evaluateExpression(f.expression, local)
+      if (recomputed === null) continue
+      if (
+        typeof recomputed === 'number' &&
+        Number.isFinite(recomputed) &&
+        local[f.id] !== recomputed
+      ) {
+        // Non-converging: don't dispatch.
+        return
+      }
     }
     for (const f of fields) {
       const computed = local[f.id]

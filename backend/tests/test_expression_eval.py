@@ -236,6 +236,24 @@ def test_validate_expression_syntax_unknown_field():
     assert "unknown_field" in errors[0]
 
 
+def test_validate_expression_syntax_unknown_dotted_segment():
+    # Typos in the *child* segment of a dotted reference must be caught — they
+    # would otherwise silently evaluate to 0 because every row's `pricce`
+    # key is missing.
+    errors = validate_expression_syntax(
+        "sum(items.pricce)", {"items", "price"}
+    )
+    assert len(errors) == 1
+    assert "items.pricce" in errors[0]
+
+
+def test_validate_expression_syntax_dotted_segments_all_known():
+    errors = validate_expression_syntax(
+        "sum(items.price)", {"items", "price"}
+    )
+    assert errors == []
+
+
 def test_validate_expression_syntax_parse_error():
     errors = validate_expression_syntax("1 +", {"items"})
     assert len(errors) >= 1
@@ -547,6 +565,47 @@ def test_client_value_dropped_when_expression_eval_returns_none():
     result = validate_submission_data(components, {"broken": 99999})
     # The malicious client value must not leak through.
     assert result.get("broken") != 99999
+
+
+def test_validate_questions_rejects_self_referential_expression():
+    components = [
+        {"type": "number", "id": "total", "label": "Total",
+         "expression": "total + 1"},
+    ]
+    with pytest.raises(ValueError, match="circular reference"):
+        validate_questions(components)
+
+
+def test_validate_questions_rejects_mutual_cycle():
+    components = [
+        {"type": "number", "id": "a", "label": "A", "expression": "b + 1"},
+        {"type": "number", "id": "b", "label": "B", "expression": "a"},
+    ]
+    with pytest.raises(ValueError, match="circular reference"):
+        validate_questions(components)
+
+
+def test_validate_questions_rejects_indirect_cycle():
+    components = [
+        {"type": "number", "id": "a", "label": "A", "expression": "b + 1"},
+        {"type": "number", "id": "b", "label": "B", "expression": "c"},
+        {"type": "number", "id": "c", "label": "C", "expression": "a"},
+    ]
+    with pytest.raises(ValueError, match="circular reference"):
+        validate_questions(components)
+
+
+def test_validate_questions_accepts_dag_of_computed_fields():
+    # `total` depends on `vat` which depends on `subtotal` (a non-computed
+    # input). No cycle — this must validate cleanly.
+    components = [
+        {"type": "number", "id": "subtotal", "label": "Subtotal"},
+        {"type": "number", "id": "vat", "label": "VAT",
+         "expression": "subtotal * 0.2"},
+        {"type": "number", "id": "total", "label": "Total",
+         "expression": "subtotal + vat"},
+    ]
+    assert validate_questions(components) == components
 
 
 def test_repeat_child_with_non_numeric_value_is_rejected_post_fix():

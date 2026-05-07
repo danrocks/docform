@@ -11,7 +11,11 @@ import re
 from datetime import datetime
 from typing import Any
 
-from expression_eval import evaluate_expression, validate_expression_syntax
+from expression_eval import (
+    evaluate_expression,
+    get_referenced_field_ids,
+    validate_expression_syntax,
+)
 
 VALID_TYPES = {"string", "number", "datetime", "choice", "repeat", "dialog"}
 
@@ -53,6 +57,59 @@ def _collect_expression_components(
             )
 
 
+def _detect_expression_cycles(components: list) -> None:
+    """Raise ValueError if there's a cycle among top-level computed fields.
+
+    Builds a directed graph where each top-level computed field points at the
+    other top-level computed fields it references in its expression, then
+    runs a DFS to detect any cycle (including a self-loop). Schemas like
+    `{"id": "total", "expression": "total + 1"}` or mutually-referencing
+    pairs like `a = b + 1` / `b = a` would crash the frontend in an infinite
+    render loop, so they're rejected at schema-validation time.
+    """
+    expr_components: list = []
+    _collect_expression_components(components, expr_components)
+
+    expr_by_id: dict[str, dict] = {}
+    for comp in expr_components:
+        cid = comp.get("id")
+        if cid:
+            expr_by_id[cid] = comp
+
+    if not expr_by_id:
+        return
+
+    # Map each computed field id to the *computed* field ids its expression
+    # references. References to non-computed fields don't matter for cycles.
+    deps: dict[str, set[str]] = {}
+    for cid, comp in expr_by_id.items():
+        refs = get_referenced_field_ids(comp.get("expression", "") or "")
+        deps[cid] = {r for r in refs if r in expr_by_id}
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color: dict[str, int] = {cid: WHITE for cid in expr_by_id}
+
+    def visit(cid: str, stack: list) -> None:
+        if color[cid] == GRAY:
+            cycle_path = stack[stack.index(cid):] + [cid]
+            raise ValueError(
+                f"Component '{cid}': circular reference detected "
+                f"({' → '.join(cycle_path)})"
+            )
+        if color[cid] == BLACK:
+            return
+        color[cid] = GRAY
+        stack.append(cid)
+        for dep in deps.get(cid, ()):
+            visit(dep, stack)
+        stack.pop()
+        color[cid] = BLACK
+
+    for cid in expr_by_id:
+        if color[cid] == WHITE:
+            visit(cid, [])
+
+
 def validate_questions(
     components: list,
     _inside_repeat: bool = False,
@@ -70,6 +127,7 @@ def validate_questions(
     # Collect every id in the full tree once at the top-level call so that
     # nested expression validation can reference outer fields (e.g. a number
     # inside a top-level dialog referencing a sibling outside that dialog).
+    is_top_level = _all_ids is None
     if _all_ids is None:
         _all_ids = set()
         _collect_component_ids(components, _all_ids)
@@ -147,6 +205,12 @@ def validate_questions(
                 )
 
         validated.append(comp)
+
+    # Cycle detection only makes sense once the full tree has been walked, so
+    # do it on the top-level call after all expressions have been syntax-
+    # validated and we know each one parses cleanly.
+    if is_top_level:
+        _detect_expression_cycles(components)
 
     return validated
 

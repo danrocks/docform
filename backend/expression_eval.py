@@ -410,7 +410,10 @@ def validate_expression_syntax(expression: str, known_field_ids: set) -> list[st
 
     Returns a list of error messages; empty list means the expression is valid.
     `known_field_ids` should contain all valid component ids (top-level and
-    nested inside repeat/dialog) that the expression may reference.
+    nested inside repeat/dialog) that the expression may reference. Every
+    segment of a dotted reference (e.g. `items.price` -> `items` and `price`)
+    must exist as some component id; otherwise a typo like `items.pricce`
+    silently evaluates to 0.
     """
     errors: list[str] = []
     if not isinstance(expression, str) or not expression.strip():
@@ -426,7 +429,25 @@ def validate_expression_syntax(expression: str, known_field_ids: set) -> list[st
     refs: list[list[str]] = []
     _collect_field_refs(ast, refs)
     for path in refs:
-        head = path[0]
-        if head not in known_field_ids:
-            errors.append(f"Unknown field reference: '{'.'.join(path)}'")
+        for segment in path:
+            if segment not in known_field_ids:
+                errors.append(f"Unknown field reference: '{'.'.join(path)}'")
+                break
     return errors
+
+
+def get_referenced_field_ids(expression: str) -> set[str]:
+    """Return the set of head field IDs referenced by an expression.
+
+    For dotted refs like `items.price`, only the head segment (`items`) is
+    returned — that's the dependency unit that matters for cycle detection
+    among top-level computed fields. Returns an empty set if the expression
+    cannot be parsed.
+    """
+    try:
+        ast = _parse(expression)
+    except ExpressionError:
+        return set()
+    refs: list[list[str]] = []
+    _collect_field_refs(ast, refs)
+    return {p[0] for p in refs if p}
