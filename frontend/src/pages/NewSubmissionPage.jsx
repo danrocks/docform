@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
@@ -474,6 +474,14 @@ export default function NewSubmissionPage() {
       .catch(() => toast.error('Failed to load templates'))
   }, [])
 
+  // Stable callback so the expression-recompute effect inside FillForm only
+  // re-runs when `data` or `template` actually change, not on every render of
+  // the parent (e.g. typing in the context textarea).
+  const handleDataChange = useCallback(
+    (k, v) => setFormData(d => ({ ...d, [k]: v })),
+    [],
+  )
+
   const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null) }
 
   const handleSubmit = async () => {
@@ -532,7 +540,7 @@ export default function NewSubmissionPage() {
             template={selected}
             data={formData}
             context={context}
-            onDataChange={(k, v) => setFormData(d => ({ ...d, [k]: v }))}
+            onDataChange={handleDataChange}
             onContextChange={setContext}
             onBack={() => setStep(1)}
             onSubmit={handleSubmit}

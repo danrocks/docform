@@ -506,6 +506,49 @@ def test_validate_questions_allows_expression_inside_top_level_dialog():
     validate_questions(components)
 
 
+def test_client_value_for_computed_field_does_not_leak_into_recompute():
+    # When a computed field is defined out-of-order (it references a sibling
+    # computed field that appears later in document order), the recompute step
+    # cannot produce the right value — that's the schema author's
+    # responsibility. But the malicious client value MUST NOT leak in via the
+    # catch-all copy. Without the leak fix, `total` would evaluate
+    # `subtotal + vat` as `100 + 999 = 1099` (using the client `vat=999`).
+    # With the leak fix, `vat` is treated as missing (0) → `total = 100`.
+    components = [
+        {"type": "number", "id": "total", "label": "Total",
+         "expression": "subtotal + vat", "decimalPlaces": 2},
+        {"type": "number", "id": "vat", "label": "VAT",
+         "expression": "subtotal * 0.2", "decimalPlaces": 2},
+        {"type": "number", "id": "subtotal", "label": "Subtotal"},
+    ]
+    result = validate_submission_data(
+        components,
+        {"subtotal": 100, "vat": 999, "total": 0},
+    )
+    # 1099 would indicate the leak is still present. 100 means the leak is
+    # closed (regardless of the fact that the schema is also poorly ordered).
+    assert result["total"] == 100
+    assert result["vat"] == 20.0
+    assert result["subtotal"] == 100
+
+
+def test_client_value_dropped_when_expression_eval_returns_none():
+    # If `evaluate_expression` returns None (e.g. a malformed expression that
+    # somehow slipped past `validate_questions`) the recompute step skips
+    # the field. The client-submitted value for that field must NOT be
+    # preserved verbatim via the catch-all copy.
+    components = [
+        # The expression here is syntactically invalid, but it doesn't go
+        # through `validate_questions` so `validate_submission_data` is the
+        # only line of defense.
+        {"type": "number", "id": "broken", "label": "Broken",
+         "expression": "1 +"},
+    ]
+    result = validate_submission_data(components, {"broken": 99999})
+    # The malicious client value must not leak through.
+    assert result.get("broken") != 99999
+
+
 def test_repeat_child_with_non_numeric_value_is_rejected_post_fix():
     # Even if a malicious schema somehow reached `validate_submission_data`
     # with `expression` on a repeat-child number field, the defense-in-depth

@@ -441,9 +441,19 @@ def validate_submission_data(components: list, data: dict) -> dict:
     if errors:
         raise ValueError("; ".join(errors))
 
+    # Computed top-level number fields are never validated (so they're not in
+    # `validated`), but they may still be present in `data`. Skip them in the
+    # catch-all copy so client-submitted values can't pollute the input to
+    # `_recompute_expressions` and influence other expressions that reference
+    # them.
+    expr_components: list = []
+    _collect_expression_components(components, expr_components)
+    expr_ids = {c.get("id") for c in expr_components if c.get("id")}
+
     for k, v in data.items():
-        if k not in validated:
-            validated[k] = v
+        if k in validated or k in expr_ids:
+            continue
+        validated[k] = v
 
     _recompute_expressions(components, validated)
 
