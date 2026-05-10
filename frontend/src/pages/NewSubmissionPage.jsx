@@ -1,8 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
 import { FileText, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react'
+import { evaluateExpression } from '../expressionEval'
+
+// Walk a component tree (including dialog/repeat children) and yield every
+// `number` component that has an `expression` property. Repeat children are
+// excluded — their per-row values are derived from the row's own data, not
+// the top-level form data, and we don't currently support per-row computed
+// fields.
+function collectExpressionFields(components) {
+  const out = []
+  const walk = (list, insideRepeat) => {
+    for (const c of list || []) {
+      if (!c) continue
+      if (c.type === 'dialog') {
+        walk(c.components || [], insideRepeat)
+      } else if (c.type === 'repeat') {
+        walk(c.components || [], true)
+      } else if (c.type === 'number' && c.expression && !insideRepeat) {
+        out.push(c)
+      }
+    }
+  }
+  walk(components, false)
+  return out
+}
 
 // Step 1: pick a template
 function PickTemplate({ templates, onSelect }) {
@@ -33,6 +57,61 @@ function PickTemplate({ templates, onSelect }) {
 // Step 2: complete interview
 function FillForm({ template, data, context, onDataChange, onContextChange, onBack, onSubmit, submitting }) {
   const [errors, setErrors] = useState({})
+
+  // Recompute any number components with `expression` whenever data changes,
+  // so the displayed/submitted value tracks its inputs in real time. We
+  // mirror the backend's `_recompute_expressions`: build a local copy of
+  // `data` and update each computed field in it as we go, so chained
+  // expressions (e.g. total = subtotal + vat where vat itself is computed)
+  // see the latest values of earlier fields in the same pass instead of a
+  // stale snapshot. Only dispatch onDataChange for fields whose value
+  // actually changed to avoid render loops.
+  //
+  // Defense-in-depth against cycles: the backend rejects schemas with
+  // self-referential or mutually-referential computed fields, but if such a
+  // schema slipped through (e.g. `total + 1` for `total`), each pass would
+  // produce a different value and React would crash with "Maximum update
+  // depth exceeded". Run a second pass against `local`; if the values don't
+  // converge, bail out instead of dispatching.
+  useEffect(() => {
+    const fields = collectExpressionFields(template.fields || [])
+    if (fields.length === 0) return
+    const local = { ...data }
+    for (const f of fields) {
+      const computed = evaluateExpression(f.expression, local)
+      if (computed === null) continue
+      // Mirror the backend's `_recompute_expressions` rounding: chained
+      // expressions must see the *rounded* intermediate value, otherwise
+      // the displayed total can disagree with what the server stores
+      // (e.g. b = round(10/3, 2) = 3.33 then c = b*3 = 9.99 on the
+      // backend but 10.0 on the frontend without this rounding).
+      const dp = f.decimalPlaces
+      local[f.id] = dp != null ? parseFloat(computed.toFixed(dp)) : computed
+    }
+    for (const f of fields) {
+      const recomputed = evaluateExpression(f.expression, local)
+      if (recomputed === null) continue
+      const dp = f.decimalPlaces
+      const rounded = dp != null ? parseFloat(recomputed.toFixed(dp)) : recomputed
+      if (
+        typeof rounded === 'number' &&
+        Number.isFinite(rounded) &&
+        local[f.id] !== rounded
+      ) {
+        // Non-converging: don't dispatch.
+        return
+      }
+    }
+    for (const f of fields) {
+      const computed = local[f.id]
+      if (typeof computed !== 'number' || !Number.isFinite(computed)) continue
+      const current = data[f.id]
+      const currentNum = typeof current === 'number' ? current : parseFloat(current)
+      if (Number.isNaN(currentNum) || currentNum !== computed) {
+        onDataChange(f.id, computed)
+      }
+    }
+  }, [data, template, onDataChange])
 
   const isEmpty = v => v == null || (typeof v === 'string' && v.trim() === '')
 
@@ -91,6 +170,8 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
         } catch { /* skip invalid regex */ }
       }
     } else if (field.type === 'number') {
+      // Computed fields are derived; skip validation entirely.
+      if (field.expression) return
       const n = parseFloat(val)
       if (isNaN(n)) errs[errKey] = 'Must be a valid number'
       else if (field.integerOnly && !Number.isInteger(n)) errs[errKey] = 'Must be a whole number'
@@ -165,17 +246,26 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
 
     if (field.type === 'number') {
       const step = field.step || (field.integerOnly ? 1 : field.decimalPlaces ? Math.pow(10, -field.decimalPlaces) : 'any')
+      const isComputed = !!field.expression
+      let displayValue = value ?? ''
+      if (isComputed && typeof value === 'number' && Number.isFinite(value)) {
+        displayValue = field.decimalPlaces != null
+          ? value.toFixed(field.decimalPlaces)
+          : String(value)
+      }
       return (
         <div className="flex items-center gap-2">
           {field.prefix && <span className="text-sm text-gray-500 font-medium">{field.prefix}</span>}
           {field.unit && !field.prefix && <span className="text-sm text-gray-500 font-medium">{field.unit}</span>}
-          <input type="number" id={field.id} value={value ?? ''}
+          <input type={isComputed ? 'text' : 'number'} id={field.id} value={displayValue}
             onChange={e => onChange(field.id, e.target.value)}
-            className={`input flex-1 ${err}`}
+            readOnly={isComputed}
+            tabIndex={isComputed ? -1 : undefined}
+            className={`input flex-1 ${err} ${isComputed ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''}`}
             placeholder={field.placeholder || ''}
-            min={field.min ?? undefined}
-            max={field.max ?? undefined}
-            step={step} />
+            min={isComputed ? undefined : (field.min ?? undefined)}
+            max={isComputed ? undefined : (field.max ?? undefined)}
+            step={isComputed ? undefined : step} />
           {field.suffix && <span className="text-sm text-gray-500 font-medium">{field.suffix}</span>}
         </div>
       )
@@ -411,6 +501,14 @@ export default function NewSubmissionPage() {
       .catch(() => toast.error('Failed to load templates'))
   }, [])
 
+  // Stable callback so the expression-recompute effect inside FillForm only
+  // re-runs when `data` or `template` actually change, not on every render of
+  // the parent (e.g. typing in the context textarea).
+  const handleDataChange = useCallback(
+    (k, v) => setFormData(d => ({ ...d, [k]: v })),
+    [],
+  )
+
   const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null) }
 
   const handleSubmit = async () => {
@@ -469,7 +567,7 @@ export default function NewSubmissionPage() {
             template={selected}
             data={formData}
             context={context}
-            onDataChange={(k, v) => setFormData(d => ({ ...d, [k]: v }))}
+            onDataChange={handleDataChange}
             onContextChange={setContext}
             onBack={() => setStep(1)}
             onSubmit={handleSubmit}
