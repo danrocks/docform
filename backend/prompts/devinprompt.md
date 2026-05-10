@@ -148,6 +148,7 @@ A `number` component can declare an `expression` that derives its value from oth
 
 * Always set `decimalPlaces` (and `prefix`/`suffix` where relevant) on computed currency fields so the displayed value is formatted correctly.
 * Do **NOT** set `required:true` on computed fields — their value is always derived.
+* The following properties are **ignored** on computed fields and should be omitted: `step`, `min`, `max`, `integerOnly`, `placeholder`, `defaultValue`. The field is rendered as a read-only text input and its value is recomputed server-side, so input-granularity hints and value constraints have no effect.
 * Computed fields still need a `{{placeholder}}` in the document if you want the value to appear there.
 * Field ids referenced in an expression must match real component ids in the same interview (top-level or inside a repeat/dialog).
 * Use `expression` for any number a user would otherwise compute by hand — totals, subtotals, taxes, averages, counts, conversions.
