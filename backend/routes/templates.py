@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 from pydantic import BaseModel
 from typing import Optional, List
-import json, uuid, re, zipfile, base64
+import json, uuid, re, zipfile, base64, shutil
 from pathlib import Path
 from fastapi import HTTPException, APIRouter, Request
 from fastapi.responses import FileResponse
@@ -217,11 +217,14 @@ async def create_template(
     content = await file.read()
     atomic_write_bytes(upload_path, content)
 
+    def _cleanup_on_error():
+        shutil.rmtree(template_dir, ignore_errors=True)
+
     if interview_json:
         try:
             parsed = json.loads(interview_json)
         except json.JSONDecodeError as e:
-            upload_path.unlink(missing_ok=True)
+            _cleanup_on_error()
             raise HTTPException(status_code=400, detail=f"Invalid interview JSON: {e}")
 
         if isinstance(parsed, dict) and "components" in parsed:
@@ -234,16 +237,20 @@ async def create_template(
                 "components": parsed,
             }
         else:
-            upload_path.unlink(missing_ok=True)
+            _cleanup_on_error()
             raise HTTPException(status_code=400, detail="Invalid interview JSON: expected object with 'components' or a list of components")
 
         try:
             validate_questions(interview.get("components", []))
         except ValueError as e:
-            upload_path.unlink(missing_ok=True)
+            _cleanup_on_error()
             raise HTTPException(status_code=400, detail=str(e))
 
-        _validate_placeholders_vs_components(upload_path, interview.get("components", []))
+        try:
+            _validate_placeholders_vs_components(upload_path, interview.get("components", []))
+        except HTTPException:
+            _cleanup_on_error()
+            raise
     else:
         placeholders = extract_placeholders_from_docx(upload_path)
         interview = {
