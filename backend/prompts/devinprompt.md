@@ -20,17 +20,17 @@ Fetch and read this schema before generating any interview. The top-level struct
 
 ```json
 {
-  "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
   "schemaVersion": 1,
   "id": "unique\_interview\_id",
   "version": 1,
-  "title": "Human-readable title",
-  "description": "What this interview is for",
   "templateId": "the\_template\_id\_returned\_after\_upload",
   "components": \[],
   "rules": \[]
 }
 ```
+
+Note: Do **not** include `title` or `description` in the interview file — the
+backend manages these in the template metadata.
 
 \---
 

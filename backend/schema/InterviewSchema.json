@@ -2,14 +2,12 @@
   "$schema": "https://json-schema.org/draft/2019-09/schema",  
   "title": "Interview Definition",  
   "type": "object",  
-  "required": ["id", "schemaVersion", "version", "title", "components"],  
+  "required": ["id", "schemaVersion", "version", "components"],  
   "properties": {  
     "$schema":       { "type": "string" },  
     "schemaVersion": { "type": "integer", "minimum": 1 },  
     "id":            { "type": "string" },  
     "version":       { "type": "integer", "minimum": 1 },  
-    "title":         { "type": "string" },  
-    "description":   { "type": "string" },  
     "templateId":    { "type": "string" },  
     "components":    { "type": "array", "items": { "$ref": "#/$defs/component" } },  
     "rules":         { "type": "array", "items": { "$ref": "#/$defs/rule" } }  

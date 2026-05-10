@@ -102,8 +102,6 @@ Field guidance:
 - "id": generate a descriptive camelCase identifier (e.g. "employmentContractInterview")  
 - "schemaVersion": always 1  
 - "version": always 1  
-- "title": a short human-readable title for the interview  
-- "description": a brief description of what the interview collects  
 - "templateId": omit this field (the backend assigns it)  
 - "components": the interview questions — see DESIGN GUIDANCE below  
 - "rules": only include if the document logic requires conditional behaviour \  

@@ -91,17 +91,17 @@ USER REQUEST:
         return schema  
   
     def _save_output(self, structured_output: dict, tenant_id: str = None) -> dict:  
-        """Persist raw Devin response JSON to TEMPLATES_DATA for audit."""  
+        """Persist raw Devin response JSON to audit directory."""  
         shared_uuid = uuid.uuid4().hex[:8]  
         json_str = json.dumps(structured_output, indent=2)  
     
         try:  
-            TEMPLATES_DATA = Path(__file__).resolve().parent.parent.parent / "data" / "templates"
+            audit_dir = Path(__file__).resolve().parent.parent / "data" / "audit"
             if tenant_id:
-                TEMPLATES_DATA = TEMPLATES_DATA / tenant_id
-            TEMPLATES_DATA.mkdir(parents=True, exist_ok=True)  
+                audit_dir = audit_dir / tenant_id
+            audit_dir.mkdir(parents=True, exist_ok=True)  
             raw_filename = f"DevinResponse_{shared_uuid}.json"  
-            (TEMPLATES_DATA / raw_filename).write_text(json_str, encoding="utf-8")  
+            (audit_dir / raw_filename).write_text(json_str, encoding="utf-8")  
             print(f"Devin raw response saved: {raw_filename}")  
         except Exception as e:  
             print(f"Warning: failed to save Devin raw response: {e}")  

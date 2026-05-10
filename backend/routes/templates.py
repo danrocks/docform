@@ -5,73 +5,105 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 from pydantic import BaseModel
 from typing import Optional, List
-import json, uuid, re, zipfile,base64
+import json, uuid, re, zipfile, base64
 from pathlib import Path
-from datetime import datetime
 from fastapi import HTTPException, APIRouter, Request
 from fastapi.responses import FileResponse
-from typing import Optional
 from auth_utils import get_current_user, require_role
 from question_schema import validate_questions
 from config import settings
 from AiResponseSaver import AiResponseSaver
-from datetime import datetime
 from tenant_context import get_current_tenant, is_tenant_subdomain, verify_tenant_match
+from file_utils import (
+    BACKEND_ROOT,
+    TEMPLATE_META_FILENAME,
+    TEMPLATE_INTERVIEW_FILENAME,
+    TEMPLATE_DOCX_FILENAME,
+    get_tenant_data_dir,
+    get_template_subdir,
+    atomic_write_text,
+    atomic_write_bytes,
+    atomic_write_json,
+    utcnow_iso,
+    count_submissions,
+)
 
 from prompts.promptbuilder import _build_system_prompt
-import providers  # noqa: F401 — triggers provider self-registration  
+import providers  # noqa: F401 — triggers provider self-registration
 from ai_providers import get_provider
 
-BACKEND_ROOT = Path(__file__).resolve().parent.parent  
-SCHEMA_DIR = BACKEND_ROOT / "schema"  
-  
-# Map provider name → schema file  
-PROVIDER_SCHEMA = {  
-    "devin":  "AiResponseSchemaFile.json",  
-    "gemini": "AiResponseSchema.json",  
-} 
+logger = logging.getLogger(__name__)
+
+SCHEMA_DIR = BACKEND_ROOT / "schema"
+
+# Map provider name → schema file
+PROVIDER_SCHEMA = {
+    "devin":  "AiResponseSchemaFile.json",
+    "gemini": "AiResponseSchema.json",
+}
 
 router = APIRouter()
-
-TEMPLATES_DATA = BACKEND_ROOT / "data" / "templates"  
-
-TEMPLATES_UPLOAD = Path("uploads/templates")
 
 OPENAI_SYSTEM_PROMPT = _build_system_prompt()
 
 
 def get_templates_dir(request: Request) -> Path:
-    if not is_tenant_subdomain(request):
-        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
-    tenant = get_current_tenant(request)
-    if not tenant:
-        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
-    path = BACKEND_ROOT / "data" / "templates" / tenant["id"]
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return get_tenant_data_dir(request, "data", "templates")
 
 
-def _load_template_with_interview(meta_path: Path, templates_dir: Path) -> dict:
-    """Load a template meta file and merge its associated interview components."""
+def _get_submissions_dir_for_tenant(request: Request) -> Path:
+    """Return the submissions dir for the current tenant (for counting)."""
+    return get_tenant_data_dir(request, "data", "submissions")
+
+
+def _load_template_with_interview(
+    template_dir: Path,
+    submissions_dir: Path | None = None,
+) -> dict:
+    """Load a template from its per-template subdirectory.
+
+    Merges interview components/rules into the response and derives
+    submissionCount from actual submission files when *submissions_dir*
+    is provided.
+    """
+    meta_path = template_dir / TEMPLATE_META_FILENAME
     meta = json.loads(meta_path.read_text())
-    interview_path = templates_dir / meta.get("interviewFile", "")
+
+    interview_path = template_dir / TEMPLATE_INTERVIEW_FILENAME
     if interview_path.exists():
         interview = json.loads(interview_path.read_text())
         meta["fields"] = interview.get("components", [])
         meta["rules"] = interview.get("rules", [])
     else:
+        logger.warning(
+            "Interview file missing for template %s at %s",
+            meta.get("id", "?"),
+            interview_path,
+        )
         meta["fields"] = []
         meta["rules"] = []
+
+    # Derive submissionCount from actual files (#1)
+    if submissions_dir is not None:
+        meta["submissionCount"] = count_submissions(
+            submissions_dir, meta.get("id", "")
+        )
+
     return meta
 
 
-def read_templates(templates_dir: Path) -> list:
+def read_templates(templates_dir: Path, submissions_dir: Path | None = None) -> list:
     out = []
-    for f in templates_dir.glob("*_meta.json"):
+    for child in templates_dir.iterdir():
+        if not child.is_dir():
+            continue
+        meta_path = child / TEMPLATE_META_FILENAME
+        if not meta_path.exists():
+            continue
         try:
-            out.append(_load_template_with_interview(f, templates_dir))
+            out.append(_load_template_with_interview(child, submissions_dir))
         except Exception:
-            pass
+            logger.exception("Failed to load template from %s", child)
     return sorted(out, key=lambda x: x.get("createdAt", x.get("created_at", "")), reverse=True)
 
 
@@ -85,34 +117,81 @@ def extract_placeholders_from_docx(path: Path) -> List[str]:
                     text = z.read(name).decode("utf-8", errors="ignore")
                     found = re.findall(r'\{\{([^}]+)\}\}', text)
                     placeholders.update(f.strip() for f in found)
-    except Exception as e:
+    except Exception:
         pass
     return sorted(placeholders)
 
 
-@router.get("/ai-status")  
-def ai_status(current_user: dict = Depends(verify_tenant_match)):  
-    provider_name = os.environ.get("AI_PROVIDER", "devin")  
-    try:  
-        get_provider(provider_name, system_prompt=OPENAI_SYSTEM_PROMPT)  
-        return {"available": True}  
-    except Exception:  
+def _validate_placeholders_vs_components(
+    docx_path: Path,
+    components: list,
+) -> None:
+    """Warn if docx placeholders and component IDs don't match (#7).
+
+    Raises HTTPException(400) on mismatch so the user can fix it at
+    upload time rather than discovering problems at render time.
+    """
+    placeholders = set(extract_placeholders_from_docx(docx_path))
+    if not placeholders:
+        return
+
+    # Collect all component IDs (top-level only; repeat-group children
+    # don't need top-level placeholders — the group id is the placeholder).
+    component_ids = {c["id"] for c in components if "id" in c}
+
+    missing_components = placeholders - component_ids
+    missing_placeholders = component_ids - placeholders
+
+    # Components inside repeat groups are allowed to lack top-level placeholders
+    repeat_child_ids: set[str] = set()
+    for c in components:
+        if c.get("type") == "repeat":
+            for child in c.get("components", []):
+                if "id" in child:
+                    repeat_child_ids.add(child["id"])
+    missing_placeholders -= repeat_child_ids
+
+    problems: list[str] = []
+    if missing_components:
+        problems.append(
+            f"Document placeholders without matching interview components: "
+            f"{', '.join(sorted(missing_components))}"
+        )
+    if missing_placeholders:
+        problems.append(
+            f"Interview components without matching document placeholders: "
+            f"{', '.join(sorted(missing_placeholders))}"
+        )
+    if problems:
+        raise HTTPException(status_code=400, detail="; ".join(problems))
+
+
+@router.get("/ai-status")
+def ai_status(current_user: dict = Depends(verify_tenant_match)):
+    provider_name = os.environ.get("AI_PROVIDER", "devin")
+    try:
+        get_provider(provider_name, system_prompt=OPENAI_SYSTEM_PROMPT)
+        return {"available": True}
+    except Exception:
         return {"available": False}
 
 
 @router.get("/")
 def list_templates(request: Request, current_user: dict = Depends(verify_tenant_match)):
     templates_dir = get_templates_dir(request)
-    return read_templates(templates_dir)
+    submissions_dir = _get_submissions_dir_for_tenant(request)
+    return read_templates(templates_dir, submissions_dir)
 
 
 @router.get("/{template_id}")
 def get_template(template_id: str, request: Request, current_user: dict = Depends(verify_tenant_match)):
     templates_dir = get_templates_dir(request)
-    path = templates_dir / f"{template_id}_meta.json"
-    if not path.exists():
+    submissions_dir = _get_submissions_dir_for_tenant(request)
+    template_dir = templates_dir / template_id
+    meta_path = template_dir / TEMPLATE_META_FILENAME
+    if not meta_path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
-    return _load_template_with_interview(path, templates_dir)
+    return _load_template_with_interview(template_dir, submissions_dir)
 
 
 @router.post("/")
@@ -132,11 +211,11 @@ async def create_template(
         raise HTTPException(status_code=400, detail="Only .docx files are supported")
 
     template_id = str(uuid.uuid4())
-    filename = f"{template_id}.docx"
-    upload_path = templates_dir / filename
+    template_dir = get_template_subdir(templates_dir, template_id)
+    upload_path = template_dir / TEMPLATE_DOCX_FILENAME
 
     content = await file.read()
-    upload_path.write_bytes(content)
+    atomic_write_bytes(upload_path, content)
 
     if interview_json:
         try:
@@ -149,12 +228,9 @@ async def create_template(
             interview = parsed
         elif isinstance(parsed, list):
             interview = {
-                "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
                 "schemaVersion": 1,
                 "id": f"{template_id}_interview",
                 "version": 1,
-                "title": name,
-                "description": description,
                 "components": parsed,
             }
         else:
@@ -166,15 +242,14 @@ async def create_template(
         except ValueError as e:
             upload_path.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail=str(e))
+
+        _validate_placeholders_vs_components(upload_path, interview.get("components", []))
     else:
         placeholders = extract_placeholders_from_docx(upload_path)
         interview = {
-            "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
             "schemaVersion": 1,
             "id": f"{template_id}_interview",
             "version": 1,
-            "title": name,
-            "description": description,
             "components": [
                 {
                     "type": "string",
@@ -187,29 +262,32 @@ async def create_template(
             ],
         }
 
-    interview_filename = f"{template_id}_interview.json"
-    (templates_dir / interview_filename).write_text(json.dumps(interview, indent=2))
+    # Remove title/description from interview — meta is the single source of truth (#6)
+    interview.pop("title", None)
+    interview.pop("description", None)
+    interview.pop("$schema", None)
+
+    atomic_write_json(template_dir / TEMPLATE_INTERVIEW_FILENAME, interview)
 
     meta = {
-        "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/TemplateMetaSchema.json",
         "schemaVersion": 1,
         "id": template_id,
         "name": name,
         "description": description,
-        "interviewFile": interview_filename,
-        "documentFile": filename,
+        "documentFile": TEMPLATE_DOCX_FILENAME,
+        "interviewFile": TEMPLATE_INTERVIEW_FILENAME,
         "originalFilename": file.filename,
         "active": True,
-        "createdAt": datetime.utcnow().isoformat(),
+        "createdAt": utcnow_iso(),
         "createdBy": current_user["id"],
         "updatedAt": None,
-        "submissionCount": 0,
         "generationMethod": "upload",
     }
 
-    meta_path = templates_dir / f"{template_id}_meta.json"
-    meta_path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(meta_path, templates_dir)
+    atomic_write_json(template_dir / TEMPLATE_META_FILENAME, meta)
+
+    submissions_dir = _get_submissions_dir_for_tenant(request)
+    return _load_template_with_interview(template_dir, submissions_dir)
 
 
 @router.put("/{template_id}")
@@ -222,10 +300,11 @@ def update_template(
     if current_user["role"] not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="Not permitted")
     templates_dir = get_templates_dir(request)
-    path = templates_dir / f"{template_id}_meta.json"
-    if not path.exists():
+    template_dir = templates_dir / template_id
+    meta_path = template_dir / TEMPLATE_META_FILENAME
+    if not meta_path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
-    meta = json.loads(path.read_text())
+    meta = json.loads(meta_path.read_text())
 
     allowed_meta = {"name", "description", "active"}
     for k, v in body.items():
@@ -237,24 +316,36 @@ def update_template(
             components = validate_questions(body["fields"])
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        interview_path = templates_dir / meta.get("interviewFile", f"{template_id}_interview.json")
+
+        interview_path = template_dir / TEMPLATE_INTERVIEW_FILENAME
         if interview_path.exists():
             interview = json.loads(interview_path.read_text())
         else:
             interview = {
-                "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
                 "schemaVersion": 1,
                 "id": f"{template_id}_interview",
                 "version": 1,
-                "title": meta.get("name", ""),
-                "description": meta.get("description", ""),
             }
         interview["components"] = components
-        interview_path.write_text(json.dumps(interview, indent=2))
+        # Auto-increment interview version (#4)
+        interview["version"] = interview.get("version", 0) + 1
+        # Ensure no title/description in interview (#6)
+        interview.pop("title", None)
+        interview.pop("description", None)
+        interview.pop("$schema", None)
 
-    meta["updatedAt"] = datetime.utcnow().isoformat()
-    path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(path, templates_dir)
+        # Cross-validate placeholders vs components (#7)
+        docx_path = template_dir / TEMPLATE_DOCX_FILENAME
+        if docx_path.exists():
+            _validate_placeholders_vs_components(docx_path, components)
+
+        atomic_write_json(interview_path, interview)
+
+    meta["updatedAt"] = utcnow_iso()
+    atomic_write_json(meta_path, meta)
+
+    submissions_dir = _get_submissions_dir_for_tenant(request)
+    return _load_template_with_interview(template_dir, submissions_dir)
 
 
 @router.delete("/{template_id}")
@@ -266,17 +357,16 @@ def delete_template(
     if current_user["role"] not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="Not permitted")
     templates_dir = get_templates_dir(request)
-    path = templates_dir / f"{template_id}_meta.json"
-    if not path.exists():
+    template_dir = templates_dir / template_id
+    meta_path = template_dir / TEMPLATE_META_FILENAME
+    if not meta_path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
-    meta = json.loads(path.read_text())
-    docx_path = templates_dir / meta.get("documentFile", "")
-    interview_path = templates_dir / meta.get("interviewFile", "")
-    if docx_path.exists():
-        docx_path.unlink()
-    if interview_path.exists():
-        interview_path.unlink()
-    path.unlink()
+
+    # Remove all files in the template subdirectory
+    for f in template_dir.iterdir():
+        f.unlink(missing_ok=True)
+    template_dir.rmdir()
+
     return {"detail": "Deleted"}
 
 
@@ -312,49 +402,48 @@ def _create_docx_from_content(document_content: str, output_path: Path):
     doc.save(str(output_path))
 
 
-def _call_ai(prompt: str, model: str | None = None, tenant_id: str | None = None) -> dict:  
-    provider_name = os.environ.get("AI_PROVIDER", "devin")  
-    provider = get_provider(provider_name, system_prompt=OPENAI_SYSTEM_PROMPT)  
-    kwargs = {}  
-    if model:  
-        kwargs["model"] = model  
+def _call_ai(prompt: str, model: str | None = None, tenant_id: str | None = None) -> dict:
+    provider_name = os.environ.get("AI_PROVIDER", "devin")
+    provider = get_provider(provider_name, system_prompt=OPENAI_SYSTEM_PROMPT)
+    kwargs = {}
+    if model:
+        kwargs["model"] = model
     if tenant_id:
         kwargs["tenant_id"] = tenant_id
     return provider.call(prompt, **kwargs)
 
-def _get_provider_format() -> str | None:  
-    """Read the document format from the provider's schema file."""  
-    provider_name = os.environ.get("AI_PROVIDER", "devin")  
-    schema_file = PROVIDER_SCHEMA.get(provider_name)  
-    if not schema_file:  
-        return None  
-    schema_path = SCHEMA_DIR / schema_file  
-    if not schema_path.exists():  
-        return None  
-    schema = json.loads(schema_path.read_text())  
+def _get_provider_format() -> str | None:
+    """Read the document format from the provider's schema file."""
+    provider_name = os.environ.get("AI_PROVIDER", "devin")
+    schema_file = PROVIDER_SCHEMA.get(provider_name)
+    if not schema_file:
+        return None
+    schema_path = SCHEMA_DIR / schema_file
+    if not schema_path.exists():
+        return None
+    schema = json.loads(schema_path.read_text())
     return schema.get("properties", {}).get("document", {}).get("format")
 
 
-@router.post("/generate")  
-def generate_template(  
+@router.post("/generate")
+def generate_template(
     request: Request,
-    body: GenerateRequest,  
+    body: GenerateRequest,
     current_user: dict = Depends(verify_tenant_match),
-):  
+):
     if current_user["role"] not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="Not permitted")
     templates_dir = get_templates_dir(request)
-    templates_dir.mkdir(parents=True, exist_ok=True)  
-  
+
     tenant = get_current_tenant(request)
     ai_result = _call_ai(body.prompt, tenant_id=tenant["id"] if tenant else None)
-  
+
     fmt = _get_provider_format()
 
-    template_id = str(uuid.uuid4())  
-    filename = f"{template_id}.docx"  
-    upload_path = templates_dir / filename  
-  
+    template_id = str(uuid.uuid4())
+    template_dir = get_template_subdir(templates_dir, template_id)
+    upload_path = template_dir / TEMPLATE_DOCX_FILENAME
+
     if fmt == "url":
         import httpx as _httpx
 
@@ -363,7 +452,6 @@ def generate_template(
         if not doc_url or not int_url:
             raise HTTPException(status_code=500, detail="AI did not return document/interview URLs")
 
-        # Normalize Devin webapp attachment URLs to API endpoints
         def _normalize_devin_url(url: str) -> str:
             if "app.devin.ai/attachments/" in url:
                 return url.replace("https://app.devin.ai/attachments/", "https://api.devin.ai/v1/attachments/")
@@ -372,7 +460,6 @@ def generate_template(
         doc_url = _normalize_devin_url(doc_url)
         int_url = _normalize_devin_url(int_url)
 
-        # Get API key for authenticated downloads
         devin_key = os.environ.get("DEVIN_KEY", getattr(settings, "DEVIN_KEY", None))
         download_headers = {}
         if devin_key:
@@ -380,7 +467,6 @@ def generate_template(
 
         max_retries = 3
 
-        # Download document with retries
         doc_resp = None
         for attempt in range(max_retries):
             try:
@@ -391,11 +477,10 @@ def generate_template(
                 if attempt == max_retries - 1:
                     raise HTTPException(status_code=502, detail=f"Failed to download document from {doc_url} after {max_retries} attempts: {e}")
                 import time
-                time.sleep(2 ** attempt)  # exponential backoff: 1s, 2s, 4s
+                time.sleep(2 ** attempt)
 
-        upload_path.write_bytes(doc_resp.content)
+        atomic_write_bytes(upload_path, doc_resp.content)
 
-        # Download interview with retries
         int_resp = None
         for attempt in range(max_retries):
             try:
@@ -417,23 +502,23 @@ def generate_template(
         else:
             raise HTTPException(status_code=500, detail="Unexpected interview format")
 
-    elif fmt == "base64":  
-        doc_b64 = ai_result.get("document", "")  
-        int_b64 = ai_result.get("interview", "")  
-        if not doc_b64 or not int_b64:  
-            raise HTTPException(status_code=500, detail="AI did not return document/interview content")  
-  
-        try:  
-            upload_path.write_bytes(base64.b64decode(doc_b64))  
-        except Exception as e:  
-            raise HTTPException(status_code=500, detail=f"Failed to decode document: {e}")  
-  
-        try:  
-            interview_text = base64.b64decode(int_b64).decode("utf-8")  
-            interview_data = json.loads(interview_text)  
-        except Exception as e:  
-            raise HTTPException(status_code=500, detail=f"Failed to decode interview: {e}")  
-  
+    elif fmt == "base64":
+        doc_b64 = ai_result.get("document", "")
+        int_b64 = ai_result.get("interview", "")
+        if not doc_b64 or not int_b64:
+            raise HTTPException(status_code=500, detail="AI did not return document/interview content")
+
+        try:
+            atomic_write_bytes(upload_path, base64.b64decode(doc_b64))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decode document: {e}")
+
+        try:
+            interview_text = base64.b64decode(int_b64).decode("utf-8")
+            interview_data = json.loads(interview_text)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decode interview: {e}")
+
         if isinstance(interview_data, dict):
             raw_questions = interview_data.get("components", interview_data.get("questions", []))
         elif isinstance(interview_data, list):
@@ -451,10 +536,10 @@ def generate_template(
             _create_docx_from_content(document_content, upload_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to create document: {e}")
-  
-    if not raw_questions:  
-        raise HTTPException(status_code=500, detail="AI did not generate interview questions")  
-  
+
+    if not raw_questions:
+        raise HTTPException(status_code=500, detail="AI did not generate interview questions")
+
     try:
         fields = validate_questions(raw_questions)
     except ValueError as e:
@@ -467,39 +552,39 @@ def generate_template(
         interview["components"] = fields
     else:
         interview = {
-            "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
             "schemaVersion": 1,
             "id": f"{template_id}_interview",
             "version": 1,
-            "title": body.name,
-            "description": description,
             "components": fields,
         }
 
-    interview_filename = f"{template_id}_interview.json"
-    (templates_dir / interview_filename).write_text(json.dumps(interview, indent=2))
+    # Remove title/description from interview — meta is the single source of truth (#6)
+    interview.pop("title", None)
+    interview.pop("description", None)
+    interview.pop("$schema", None)
+
+    atomic_write_json(template_dir / TEMPLATE_INTERVIEW_FILENAME, interview)
 
     meta = {
-        "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/TemplateMetaSchema.json",
         "schemaVersion": 1,
         "id": template_id,
         "name": body.name,
         "description": description,
-        "interviewFile": interview_filename,
-        "documentFile": filename,
+        "documentFile": TEMPLATE_DOCX_FILENAME,
+        "interviewFile": TEMPLATE_INTERVIEW_FILENAME,
         "originalFilename": f"{body.name.replace(' ', '_')}.docx",
         "active": True,
-        "createdAt": datetime.utcnow().isoformat(),
+        "createdAt": utcnow_iso(),
         "createdBy": current_user["id"],
         "updatedAt": None,
-        "submissionCount": 0,
         "generationMethod": "ai",
         "originalPrompt": body.prompt,
     }
 
-    meta_path = templates_dir / f"{template_id}_meta.json"
-    meta_path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(meta_path, templates_dir)
+    atomic_write_json(template_dir / TEMPLATE_META_FILENAME, meta)
+
+    submissions_dir = _get_submissions_dir_for_tenant(request)
+    return _load_template_with_interview(template_dir, submissions_dir)
 
 @router.post("/{template_id}/regenerate")
 def regenerate_template(
@@ -511,8 +596,9 @@ def regenerate_template(
     if current_user["role"] not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="Not permitted")
     templates_dir = get_templates_dir(request)
-    path = templates_dir / f"{template_id}_meta.json"
-    if not path.exists():
+    template_dir = templates_dir / template_id
+    meta_path = template_dir / TEMPLATE_META_FILENAME
+    if not meta_path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
 
     api_key = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
@@ -520,7 +606,7 @@ def regenerate_template(
         raise HTTPException(status_code=501, detail="AI generation not configured")
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-    meta = json.loads(path.read_text())
+    meta = json.loads(meta_path.read_text())
 
     ai_result = _call_ai(body.prompt, model)
 
@@ -537,39 +623,43 @@ def regenerate_template(
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI generated invalid questions: {e}")
 
-    upload_path = templates_dir / meta["documentFile"]
+    upload_path = template_dir / TEMPLATE_DOCX_FILENAME
     try:
         _create_docx_from_content(document_content, upload_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create document: {e}")
 
-    interview_filename = meta.get("interviewFile", f"{template_id}_interview.json")
-    interview_path = templates_dir / interview_filename
+    interview_path = template_dir / TEMPLATE_INTERVIEW_FILENAME
     if interview_path.exists():
         interview = json.loads(interview_path.read_text())
     else:
         interview = {
-            "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
             "schemaVersion": 1,
             "id": f"{template_id}_interview",
             "version": 1,
-            "title": meta.get("name", ""),
-            "description": meta.get("description", ""),
         }
     interview["components"] = fields
-    interview_path.write_text(json.dumps(interview, indent=2))
+    # Auto-increment interview version (#4)
+    interview["version"] = interview.get("version", 0) + 1
+    # Remove title/description from interview (#6)
+    interview.pop("title", None)
+    interview.pop("description", None)
+    interview.pop("$schema", None)
+    atomic_write_json(interview_path, interview)
 
-    meta["interviewFile"] = interview_filename
     meta["originalPrompt"] = body.prompt
     meta["generationMethod"] = "ai"
-    meta["updatedAt"] = datetime.utcnow().isoformat()
+    meta["updatedAt"] = utcnow_iso()
 
-    path.write_text(json.dumps(meta, indent=2))
-    return _load_template_with_interview(path, templates_dir)
+    atomic_write_json(meta_path, meta)
 
-# New route to serve generated files safely
-@router.get("/download/{filename}")
+    submissions_dir = _get_submissions_dir_for_tenant(request)
+    return _load_template_with_interview(template_dir, submissions_dir)
+
+# Serve files from a template subdirectory safely
+@router.get("/download/{template_id}/{filename}")
 def download_generated_file(
+    template_id: str,
     filename: str,
     request: Request,
     current_user: dict = Depends(verify_tenant_match),
@@ -577,8 +667,9 @@ def download_generated_file(
     if not re.match(r"^[\w\-. ]+\.(json|docx)$", filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
     templates_dir = get_templates_dir(request)
-    file_path = os.path.abspath(os.path.join(str(templates_dir), filename))
-    if not file_path.startswith(str(templates_dir.resolve()) + os.sep):
+    template_dir = templates_dir / template_id
+    file_path = os.path.abspath(os.path.join(str(template_dir), filename))
+    if not file_path.startswith(str(template_dir.resolve()) + os.sep):
         raise HTTPException(status_code=400, detail="Invalid path")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
