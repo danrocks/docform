@@ -56,6 +56,27 @@ def _get_submissions_dir_for_tenant(request: Request) -> Path:
     return get_tenant_data_dir(request, "data", "submissions")
 
 
+_CAMEL_TO_SNAKE = {
+    "submissionCount": "submission_count",
+    "originalFilename": "original_filename",
+    "generationMethod": "generation_method",
+    "originalPrompt": "original_prompt",
+    "createdAt": "created_at",
+    "createdBy": "created_by",
+    "updatedAt": "updated_at",
+    "schemaVersion": "schema_version",
+    "interviewFile": "interview_file",
+    "documentFile": "document_file",
+}
+
+
+def _add_snake_case_aliases(d: dict) -> None:
+    """Add snake_case aliases for camelCase keys so the frontend can use either."""
+    for camel, snake in _CAMEL_TO_SNAKE.items():
+        if camel in d and snake not in d:
+            d[snake] = d[camel]
+
+
 def _load_template_with_interview(
     template_dir: Path,
     submissions_dir: Path | None = None,
@@ -88,6 +109,9 @@ def _load_template_with_interview(
         meta["submissionCount"] = count_submissions(
             submissions_dir, meta.get("id", "")
         )
+
+    # Add snake_case aliases for frontend compatibility
+    _add_snake_case_aliases(meta)
 
     return meta
 
