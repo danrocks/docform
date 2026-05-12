@@ -10,7 +10,6 @@ from pathlib import Path
 from docxtpl import DocxTemplate
 from auth_utils import get_current_user, require_role
 from question_schema import validate_submission_data
-from expression_eval import evaluate_expression
 from tenant_context import get_current_tenant, is_tenant_subdomain, verify_tenant_match
 from file_utils import (
     BACKEND_ROOT,
@@ -23,26 +22,6 @@ from file_utils import (
 )
 
 router = APIRouter()
-
-
-def _recompute_expressions(components: list, data: dict) -> dict:
-    """Evaluate all expression fields and inject computed values into data.
-
-    Walks the component tree and evaluates number fields with ``expression``.
-    Repeat-group children are skipped (their values come from the frontend).
-    Returns a new dict with computed values added.
-    """
-    result = dict(data)
-    for comp in components:
-        ctype = comp.get("type", "")
-        if ctype == "dialog":
-            result = _recompute_expressions(comp.get("components", []), result)
-        elif ctype == "number" and comp.get("expression"):
-            val = evaluate_expression(comp["expression"], result)
-            if val is not None:
-                dp = comp.get("decimalPlaces")
-                result[comp["id"]] = round(val, dp) if dp is not None else val
-    return result
 
 
 def get_submissions_dir(request: Request) -> Path:
@@ -128,9 +107,6 @@ def create_submission(
         validated_data = validate_submission_data(fields, body.data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    # Evaluate computed expression fields before rendering
-    validated_data = _recompute_expressions(fields, validated_data)
 
     submission_id = str(uuid.uuid4())
     now = utcnow_iso()
