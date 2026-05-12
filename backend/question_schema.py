@@ -435,10 +435,6 @@ def _validate_component(
         validated[cid] = validated_items
         return
 
-    # Skip expression fields — they are computed, not user-supplied
-    if ctype == "number" and comp.get("expression"):
-        return
-
     value = data.get(cid)
 
     if required and _is_empty(value):
