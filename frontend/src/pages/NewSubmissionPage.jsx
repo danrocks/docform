@@ -204,7 +204,16 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
 
   const handleSubmit = e => {
     e.preventDefault()
-    if (validate()) onSubmit()
+    if (validate()) {
+      onSubmit()
+    } else {
+      toast.error('Please fix the highlighted fields before submitting')
+      // Scroll to the first field with an error
+      setTimeout(() => {
+        const firstErr = document.querySelector('[data-field-error]')
+        if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+    }
   }
 
   const renderField = (field, value, onChange, errKeyPrefix = '') => {
@@ -415,7 +424,7 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
               + Add {field.label}
             </button>
           </div>
-          {errors[errKey] && <p className="text-xs text-red-500 mt-1">{errors[errKey]}</p>}
+          {errors[errKey] && <p data-field-error className="text-xs text-red-500 mt-1">{errors[errKey]}</p>}
         </div>
       )
     }
@@ -431,7 +440,7 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
           <p className="text-xs text-gray-500 mt-0.5 mb-1">{field.helpText}</p>
         )}
         {renderField(field, scope[field.id], onScopeChange, errKeyPrefix)}
-        {errors[errKey] && <p className="text-xs text-red-500 mt-1">{errors[errKey]}</p>}
+        {errors[errKey] && <p data-field-error className="text-xs text-red-500 mt-1">{errors[errKey]}</p>}
       </div>
     )
   }

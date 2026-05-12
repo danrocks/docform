@@ -16,7 +16,6 @@
     "createdAt":        { "type": "string", "format": "date-time" },  
     "createdBy":        { "type": "string" },  
     "updatedAt":        { "type": ["string", "null"], "format": "date-time" },  
-    "submissionCount":  { "type": "integer", "minimum": 0, "default": 0 },  
     "generationMethod": { "enum": ["upload", "ai"] },  
     "originalPrompt":   { "type": "string", "description": "Only present for AI-generated templates" }  
   },  

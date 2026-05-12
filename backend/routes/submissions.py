@@ -7,48 +7,33 @@ from pydantic import BaseModel
 from typing import Optional
 import json, uuid, subprocess, shutil
 from pathlib import Path
-from datetime import datetime
 from docxtpl import DocxTemplate
 from auth_utils import get_current_user, require_role
 from question_schema import validate_submission_data
 from tenant_context import get_current_tenant, is_tenant_subdomain, verify_tenant_match
+from file_utils import (
+    BACKEND_ROOT,
+    TEMPLATE_META_FILENAME,
+    TEMPLATE_INTERVIEW_FILENAME,
+    TEMPLATE_DOCX_FILENAME,
+    get_tenant_data_dir,
+    atomic_write_json,
+    utcnow_iso,
+)
 
 router = APIRouter()
 
-BACKEND_ROOT = Path(__file__).resolve().parent.parent
-
 
 def get_submissions_dir(request: Request) -> Path:
-    if not is_tenant_subdomain(request):
-        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
-    tenant = get_current_tenant(request)
-    if not tenant:
-        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
-    path = BACKEND_ROOT / "data" / "submissions" / tenant["id"]
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return get_tenant_data_dir(request, "data", "submissions")
 
 
 def get_templates_dir(request: Request) -> Path:
-    if not is_tenant_subdomain(request):
-        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
-    tenant = get_current_tenant(request)
-    if not tenant:
-        raise HTTPException(status_code=403, detail="Templates are tenant-scoped")
-    path = BACKEND_ROOT / "data" / "templates" / tenant["id"]
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return get_tenant_data_dir(request, "data", "templates")
 
 
 def get_generated_dir(request: Request) -> Path:
-    if not is_tenant_subdomain(request):
-        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
-    tenant = get_current_tenant(request)
-    if not tenant:
-        raise HTTPException(status_code=403, detail="Submissions are tenant-scoped")
-    path = BACKEND_ROOT / "uploads" / "generated" / tenant["id"]
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return get_tenant_data_dir(request, "uploads", "generated")
 
 
 def read_submissions(submissions_dir: Path, filter_template: str = None, filter_user: str = None, role: str = None) -> list:
@@ -105,12 +90,14 @@ def create_submission(
     submissions_dir = get_submissions_dir(request)
     generated_dir = get_generated_dir(request)
 
-    tpl_path = templates_dir / f"{body.template_id}_meta.json"
+    # Per-template subdirectory layout (#8)
+    template_dir = templates_dir / body.template_id
+    tpl_path = template_dir / TEMPLATE_META_FILENAME
     if not tpl_path.exists():
         raise HTTPException(status_code=404, detail="Template not found")
     meta = json.loads(tpl_path.read_text())
 
-    interview_path = templates_dir / meta.get("interviewFile", "")
+    interview_path = template_dir / TEMPLATE_INTERVIEW_FILENAME
     if not interview_path.exists():
         raise HTTPException(status_code=500, detail="Template interview file not found")
     interview = json.loads(interview_path.read_text())
@@ -122,12 +109,14 @@ def create_submission(
         raise HTTPException(status_code=400, detail=str(e))
 
     submission_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = utcnow_iso()
 
+    # Store interview version for traceability (#4)
     submission = {
         "id": submission_id,
         "template_id": body.template_id,
         "template_name": meta["name"],
+        "interviewVersion": interview.get("version", 1),
         "data": validated_data,
         "context": body.context,
         "status": "pending",
@@ -141,26 +130,26 @@ def create_submission(
     }
 
     try:
-        docx_out, pdf_out = generate_documents(meta, submission, templates_dir, generated_dir)
-        submission["docx_path"] = str(docx_out)
-        submission["pdf_path"] = str(pdf_out) if pdf_out else None
+        docx_out, pdf_out = generate_documents(meta, submission, template_dir, generated_dir)
+        # Store paths relative to BACKEND_ROOT (#3)
+        submission["docx_path"] = str(docx_out.relative_to(BACKEND_ROOT))
+        submission["pdf_path"] = str(pdf_out.relative_to(BACKEND_ROOT)) if pdf_out else None
         submission["status"] = "generated"
     except Exception as e:
         submission["status"] = "error"
         submission["error"] = str(e)
 
-    (submissions_dir / f"{submission_id}.json").write_text(json.dumps(submission, indent=2))
+    atomic_write_json(submissions_dir / f"{submission_id}.json", submission)
 
-    meta["submissionCount"] = meta.get("submissionCount", 0) + 1
-    tpl_path.write_text(json.dumps(meta, indent=2))
+    # submissionCount is now derived, no need to update meta (#1)
 
     return submission
 
 
-def generate_documents(template: dict, submission: dict, templates_dir: Path, generated_dir: Path):
+def generate_documents(template: dict, submission: dict, template_dir: Path, generated_dir: Path):
     """Fill the docx template and convert to PDF."""
     generated_dir.mkdir(parents=True, exist_ok=True)
-    src = templates_dir / template["documentFile"]
+    src = template_dir / TEMPLATE_DOCX_FILENAME
     if not src.exists():
         raise FileNotFoundError(f"Template file not found: {src}")
 
@@ -202,8 +191,8 @@ def approve_submission(
     sub["status"] = "approved"
     sub["approved_by"] = current_user["id"]
     sub["approved_by_name"] = current_user["name"]
-    sub["approved_at"] = datetime.utcnow().isoformat()
-    path.write_text(json.dumps(sub, indent=2))
+    sub["approved_at"] = utcnow_iso()
+    atomic_write_json(path, sub)
     return sub
 
 
@@ -224,8 +213,8 @@ def reject_submission(
     sub["status"] = "rejected"
     sub["rejection_reason"] = body.get("reason", "")
     sub["rejected_by"] = current_user["id"]
-    sub["rejected_at"] = datetime.utcnow().isoformat()
-    path.write_text(json.dumps(sub, indent=2))
+    sub["rejected_at"] = utcnow_iso()
+    atomic_write_json(path, sub)
     return sub
 
 
@@ -249,10 +238,15 @@ def download_document(
         raise HTTPException(status_code=403, detail="Access denied")
 
     file_path_key = f"{format}_path"
-    file_path = sub.get(file_path_key)
-    if not file_path or not Path(file_path).exists():
+    rel_path = sub.get(file_path_key)
+    if not rel_path:
+        raise HTTPException(status_code=404, detail=f"{format.upper()} file not available")
+
+    # Resolve relative path back to absolute (#3)
+    file_path = BACKEND_ROOT / rel_path
+    if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"{format.upper()} file not available")
 
     media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if format == "docx" else "application/pdf"
     filename = f"{sub['template_name'].replace(' ', '_')}_{submission_id[:8]}.{format}"
-    return FileResponse(file_path, media_type=media_type, filename=filename)
+    return FileResponse(str(file_path), media_type=media_type, filename=filename)

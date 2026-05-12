@@ -80,7 +80,7 @@ export default function SubmissionsPage() {
                   <td className="px-5 py-3 font-medium text-gray-900">{s.template_name}</td>
                   {user.role !== 'staff' && <td className="px-5 py-3 text-gray-600">{s.submitted_by_name}</td>}
                   <td className="px-5 py-3 text-gray-500 text-xs">
-                    {formatDistanceToNow(new Date(s.submitted_at + 'Z'), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(s.submitted_at), { addSuffix: true })}
                   </td>
                   <td className="px-5 py-3">
                     <span className={STATUS_CLASSES[s.status] || 'badge'}>{s.status}</span>

@@ -78,8 +78,8 @@ export default function SubmissionDetailPage() {
   if (!sub) return <div className="text-center text-gray-400 py-16 text-sm">Not found</div>
 
   const canApprove = ['admin','approver'].includes(user.role) && ['generated','pending'].includes(sub.status)
-  const submittedDate = sub.submitted_at ? format(new Date(sub.submitted_at + 'Z'), 'PPpp') : '—'
-  const approvedDate = sub.approved_at ? format(new Date(sub.approved_at + 'Z'), 'PPpp') : null
+  const submittedDate = sub.submitted_at ? format(new Date(sub.submitted_at), 'PPpp') : '—'
+  const approvedDate = sub.approved_at ? format(new Date(sub.approved_at), 'PPpp') : null
 
   return (
     <div>

@@ -1,10 +1,7 @@
 {
-  "$schema": "https://github.com/danrocks/docform/blob/master/backend/schema/InterviewSchema.json",
   "schemaVersion": 1,
   "id": "danvet_bill_interview",
   "version": 1,
-  "title": "DanVet Bill",
-  "description": "Generate a bill for a DanVet veterinary client, capturing the billing date, customer, description of work, and amount to charge.",
   "components": [
     {
       "type": "datetime",
@@ -41,7 +38,7 @@
       "min": 0,
       "step": 0.01,
       "decimalPlaces": 2,
-      "prefix": "\u00a3"
+      "prefix": "£"
     }
   ]
 }
