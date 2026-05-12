@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
 import { FileText, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react'
+import { evaluateComputedFields } from '../expressionEval'
 
 // Step 1: pick a template
 function PickTemplate({ templates, onSelect }) {
@@ -37,6 +38,9 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
   const isEmpty = v => v == null || (typeof v === 'string' && v.trim() === '')
 
   const validateComponent = (field, scope, errs, pathPrefix = '') => {
+    // Skip computed expression fields
+    if (field.type === 'number' && field.expression) return
+
     const errKey = pathPrefix + field.id
 
     if (field.type === 'dialog') {
@@ -164,6 +168,20 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
     }
 
     if (field.type === 'number') {
+      if (field.expression) {
+        const displayVal = value != null && value !== '' ? (
+          field.decimalPlaces != null ? parseFloat(value).toFixed(field.decimalPlaces) : value
+        ) : '—'
+        return (
+          <div className="flex items-center gap-2">
+            {field.prefix && <span className="text-sm text-gray-500 font-medium">{field.prefix}</span>}
+            <div className="input flex-1 bg-gray-50 text-gray-700 font-medium cursor-not-allowed">
+              {displayVal}
+            </div>
+            {field.suffix && <span className="text-sm text-gray-500 font-medium">{field.suffix}</span>}
+          </div>
+        )
+      }
       const step = field.step || (field.integerOnly ? 1 : field.decimalPlaces ? Math.pow(10, -field.decimalPlaces) : 'any')
       return (
         <div className="flex items-center gap-2">
@@ -412,6 +430,14 @@ export default function NewSubmissionPage() {
   }, [])
 
   const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null) }
+
+  // Recompute expression fields whenever form data changes
+  useEffect(() => {
+    if (!selected) return
+    const computed = evaluateComputedFields(selected.fields || [], formData)
+    // Only update if computed values differ to avoid infinite loop
+    if (JSON.stringify(computed) !== JSON.stringify(formData)) setFormData(computed)
+  }, [formData, selected])
 
   const handleSubmit = async () => {
     setSubmitting(true)

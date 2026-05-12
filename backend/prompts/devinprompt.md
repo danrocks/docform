@@ -79,6 +79,7 @@ For monetary amounts, quantities, percentages, measurements, counts.
 |`unit`|string|—|Display unit label (e.g. `"days"`, `"kg"`)|
 |`prefix`|string|—|Shown before the input (e.g. `"£"`, `"$"`, `"€"`)|
 |`suffix`|string|—|Shown after the input (e.g. `"%"`, `"hrs"`)|
+|`expression`|string|—|Formula for auto-calculated fields (see Computed Fields below)|
 
 **Guidance:**
 
@@ -88,6 +89,7 @@ For monetary amounts, quantities, percentages, measurements, counts.
 * For measurements: set appropriate `unit` (e.g. `unit:"kg"`, `unit:"metres"`).
 * Use `step` to control input granularity — e.g. `step:0.01` for currency, `step:1` for integers, `step:0.5` for half-unit increments.
 * Set sensible `min`/`max` bounds where the domain implies them.
+* For totals or computed values: use the `expression` property instead of making the user enter the value manually. See the Computed Fields section below.
 
 \---
 
@@ -178,6 +180,60 @@ For grouping related questions into logical sections.
 * Dialog `id`s do **NOT** need corresponding `{{placeholders}}` — only the components inside them do.
 * Nest components of any type inside a dialog (including repeat groups).
 * Every interview with more than 6–8 questions should use dialogs to group related questions.
+
+\---
+
+## Computed Fields (Expressions)
+
+Number components can have an `expression` property that auto-calculates the value from other fields. Expression fields are read-only in the interview form and automatically populated.
+
+### Syntax
+
+| Feature | Example | Description |
+|-|-|-|
+| Field reference | `price` | Top-level field value |
+| Repeat-group ref | `items.quantity` | Field inside a repeat group (used inside aggregates) |
+| Arithmetic | `price * 1.2` | `+`, `-`, `*`, `/` |
+| Parentheses | `(base + tax) * count` | Grouping |
+| `sum()` | `sum(items.quantity * items.unit_price)` | Sum per-row products across a repeat group |
+| `count()` | `count(items)` | Number of entries in a repeat group |
+| `avg()` | `avg(items.amount)` | Average of a field across a repeat group |
+| `min()` / `max()` | `min(items.price)` | Min/max of a field across a repeat group |
+| `round()` | `round(total * 0.2, 2)` | Round to N decimal places |
+
+### Example
+
+```json
+{
+  "type": "repeat",
+  "id": "line_items",
+  "label": "Line items",
+  "displayAs": "spreadsheet",
+  "components": [
+    { "type": "string", "id": "description", "label": "Description", "required": true },
+    { "type": "number", "id": "quantity", "label": "Qty", "integerOnly": true, "min": 1 },
+    { "type": "number", "id": "unit_price", "label": "Unit price", "decimalPlaces": 2, "prefix": "£" }
+  ]
+}
+```
+```json
+{
+  "type": "number",
+  "id": "subtotal",
+  "label": "Subtotal",
+  "decimalPlaces": 2,
+  "prefix": "£",
+  "expression": "sum(line_items.quantity * line_items.unit_price)"
+}
+```
+
+**Guidance:**
+
+* Use expressions for totals, subtotals, tax calculations, and any value derived from other fields.
+* Always set `decimalPlaces` on computed currency fields.
+* The computed field still needs a `{{placeholder}}` in the document — the calculated value is injected automatically.
+* Do **not** set `required: true` on expression fields — they are populated automatically.
+* Expression fields can reference other expression fields as long as the referenced field appears earlier in the component list.
 
 \---
 

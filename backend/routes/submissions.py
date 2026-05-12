@@ -10,6 +10,7 @@ from pathlib import Path
 from docxtpl import DocxTemplate
 from auth_utils import get_current_user, require_role
 from question_schema import validate_submission_data
+from expression_eval import evaluate_computed_fields
 from tenant_context import get_current_tenant, is_tenant_subdomain, verify_tenant_match
 from file_utils import (
     BACKEND_ROOT,
@@ -107,6 +108,9 @@ def create_submission(
         validated_data = validate_submission_data(fields, body.data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Evaluate computed expression fields before rendering
+    validated_data = evaluate_computed_fields(fields, validated_data)
 
     submission_id = str(uuid.uuid4())
     now = utcnow_iso()

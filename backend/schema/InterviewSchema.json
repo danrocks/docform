@@ -66,7 +66,8 @@
         "decimalPlaces": { "type": "integer", "minimum": 0 },  
         "unit":          { "type": "string" },  
         "prefix":        { "type": "string" },  
-        "suffix":        { "type": "string" }  
+        "suffix":        { "type": "string" },  
+        "expression":    { "type": "string" }  
       },  
       "additionalProperties": false  
     },  

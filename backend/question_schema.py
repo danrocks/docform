@@ -282,6 +282,10 @@ def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -
         validated[cid] = validated_items
         return
 
+    # Skip expression fields — they are computed, not user-supplied
+    if ctype == "number" and comp.get("expression"):
+        return
+
     value = data.get(cid)
 
     if required and _is_empty(value):
