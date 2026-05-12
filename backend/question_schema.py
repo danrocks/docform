@@ -11,10 +11,110 @@ import re
 from datetime import datetime
 from typing import Any
 
+from expression_eval import (
+    evaluate_expression,
+    get_referenced_field_ids,
+    validate_expression_syntax,
+)
+
 VALID_TYPES = {"string", "number", "datetime", "choice", "repeat", "dialog"}
 
 
-def validate_questions(components: list) -> list:
+def _collect_component_ids(components: list, ids: set) -> None:
+    """Recursively gather every component id from a tree."""
+    if not isinstance(components, list):
+        return
+    for comp in components:
+        if not isinstance(comp, dict):
+            continue
+        cid = comp.get("id")
+        if cid:
+            ids.add(cid)
+        if comp.get("type") in ("repeat", "dialog"):
+            _collect_component_ids(comp.get("components", []), ids)
+
+
+def _collect_expression_components(
+    components: list, out: list, inside_repeat: bool = False
+) -> None:
+    """Walk the component tree and collect each number component that has an
+    `expression` property. Components inside `repeat` groups are skipped — they
+    cannot be evaluated against the top-level form data and per-row computed
+    fields are not currently supported."""
+    if not isinstance(components, list):
+        return
+    for comp in components:
+        if not isinstance(comp, dict):
+            continue
+        ctype = comp.get("type")
+        if ctype == "number" and comp.get("expression") and not inside_repeat:
+            out.append(comp)
+        if ctype == "repeat":
+            _collect_expression_components(comp.get("components", []), out, True)
+        elif ctype == "dialog":
+            _collect_expression_components(
+                comp.get("components", []), out, inside_repeat
+            )
+
+
+def _detect_expression_cycles(components: list) -> None:
+    """Raise ValueError if there's a cycle among top-level computed fields.
+
+    Builds a directed graph where each top-level computed field points at the
+    other top-level computed fields it references in its expression, then
+    runs a DFS to detect any cycle (including a self-loop). Schemas like
+    `{"id": "total", "expression": "total + 1"}` or mutually-referencing
+    pairs like `a = b + 1` / `b = a` would crash the frontend in an infinite
+    render loop, so they're rejected at schema-validation time.
+    """
+    expr_components: list = []
+    _collect_expression_components(components, expr_components)
+
+    expr_by_id: dict[str, dict] = {}
+    for comp in expr_components:
+        cid = comp.get("id")
+        if cid:
+            expr_by_id[cid] = comp
+
+    if not expr_by_id:
+        return
+
+    # Map each computed field id to the *computed* field ids its expression
+    # references. References to non-computed fields don't matter for cycles.
+    deps: dict[str, set[str]] = {}
+    for cid, comp in expr_by_id.items():
+        refs = get_referenced_field_ids(comp.get("expression", "") or "")
+        deps[cid] = {r for r in refs if r in expr_by_id}
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color: dict[str, int] = {cid: WHITE for cid in expr_by_id}
+
+    def visit(cid: str, stack: list) -> None:
+        if color[cid] == GRAY:
+            cycle_path = stack[stack.index(cid):] + [cid]
+            raise ValueError(
+                f"Component '{cid}': circular reference detected "
+                f"({' → '.join(cycle_path)})"
+            )
+        if color[cid] == BLACK:
+            return
+        color[cid] = GRAY
+        stack.append(cid)
+        for dep in deps.get(cid, ()):
+            visit(dep, stack)
+        stack.pop()
+        color[cid] = BLACK
+
+    for cid in expr_by_id:
+        if color[cid] == WHITE:
+            visit(cid, [])
+
+
+def validate_questions(
+    components: list,
+    _inside_repeat: bool = False,
+    _all_ids: set | None = None,
+) -> list:
     """Validate a list of InterviewSchema components (recursive).
 
     Ensures each component has a valid type, unique id, and the fields required
@@ -23,6 +123,14 @@ def validate_questions(components: list) -> list:
     """
     if not isinstance(components, list):
         raise ValueError("Components must be a list")
+
+    # Collect every id in the full tree once at the top-level call so that
+    # nested expression validation can reference outer fields (e.g. a number
+    # inside a top-level dialog referencing a sibling outside that dialog).
+    is_top_level = _all_ids is None
+    if _all_ids is None:
+        _all_ids = set()
+        _collect_component_ids(components, _all_ids)
 
     validated: list = []
     seen_ids: set = set()
@@ -67,15 +175,42 @@ def validate_questions(components: list) -> list:
                         f"Component '{cid}': each option must have 'value' and 'label'"
                     )
 
-        if ctype in ("repeat", "dialog"):
+        if ctype == "repeat":
             nested = comp.get("components", [])
             if not isinstance(nested, list) or len(nested) == 0:
                 raise ValueError(
-                    f"Component '{cid}': {ctype} type requires a non-empty 'components' array"
+                    f"Component '{cid}': repeat type requires a non-empty 'components' array"
                 )
-            validate_questions(nested)
+            validate_questions(nested, _inside_repeat=True, _all_ids=_all_ids)
+        elif ctype == "dialog":
+            nested = comp.get("components", [])
+            if not isinstance(nested, list) or len(nested) == 0:
+                raise ValueError(
+                    f"Component '{cid}': dialog type requires a non-empty 'components' array"
+                )
+            validate_questions(
+                nested, _inside_repeat=_inside_repeat, _all_ids=_all_ids
+            )
+
+        if ctype == "number" and comp.get("expression"):
+            if _inside_repeat:
+                raise ValueError(
+                    f"Component '{cid}': 'expression' is not supported on number "
+                    f"components inside a repeat group"
+                )
+            expr_errors = validate_expression_syntax(comp["expression"], _all_ids)
+            if expr_errors:
+                raise ValueError(
+                    f"Component '{cid}': invalid expression — {'; '.join(expr_errors)}"
+                )
 
         validated.append(comp)
+
+    # Cycle detection only makes sense once the full tree has been walked, so
+    # do it on the top-level call after all expressions have been syntax-
+    # validated and we know each one parses cleanly.
+    if is_top_level:
+        _detect_expression_cycles(components)
 
     return validated
 
@@ -229,14 +364,30 @@ def _is_empty(value: Any) -> bool:
     return False
 
 
-def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -> None:
+def _validate_component(
+    comp: dict,
+    data: dict,
+    validated: dict,
+    errors: list,
+    inside_repeat: bool = False,
+) -> None:
     ctype = comp.get("type")
     cid = comp.get("id")
     required = comp.get("required", False)
 
+    # Top-level computed number fields are derived server-side; skip all
+    # client-value validation (required, min/max, decimalPlaces). The actual
+    # value is set later by `_recompute_expressions`. Inside repeats this
+    # is rejected at schema-validation time, but we re-check here as a
+    # defense-in-depth measure: any expression-bearing field that slips
+    # through inside a repeat falls back to normal number validation so
+    # arbitrary client values cannot pass through unvalidated.
+    if ctype == "number" and comp.get("expression") and not inside_repeat:
+        return
+
     if ctype == "dialog":
         for nested in comp.get("components", []):
-            _validate_component(nested, data, validated, errors)
+            _validate_component(nested, data, validated, errors, inside_repeat)
         return
 
     if ctype == "repeat":
@@ -269,7 +420,9 @@ def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -
             item_validated: dict = {}
             item_errors: list = []
             for nested in nested_components:
-                _validate_component(nested, item, item_validated, item_errors)
+                _validate_component(
+                    nested, item, item_validated, item_errors, inside_repeat=True
+                )
             if item_errors:
                 for e in item_errors:
                     errors.append(f"{_label_for(comp)}[{idx + 1}]: {e}")
@@ -319,6 +472,29 @@ def _validate_component(comp: dict, data: dict, validated: dict, errors: list) -
         validated[cid] = result
 
 
+def _recompute_expressions(components: list, validated: dict) -> None:
+    """Overwrite computed `number` fields with server-side evaluations.
+
+    The client-submitted value for any number component with an `expression`
+    is replaced by re-evaluating the expression against `validated`. This
+    ensures the server is the source of truth for derived values.
+    """
+    expr_components: list = []
+    _collect_expression_components(components, expr_components)
+    for comp in expr_components:
+        cid = comp.get("id")
+        expression = comp.get("expression")
+        if not cid or not expression:
+            continue
+        result = evaluate_expression(expression, validated)
+        if result is None:
+            continue
+        decimal_places = comp.get("decimalPlaces")
+        if decimal_places is not None:
+            result = round(result, int(decimal_places))
+        validated[cid] = result
+
+
 def validate_submission_data(components: list, data: dict) -> dict:
     """Validate submitted interview answers against InterviewSchema components."""
     if not isinstance(data, dict):
@@ -333,8 +509,20 @@ def validate_submission_data(components: list, data: dict) -> dict:
     if errors:
         raise ValueError("; ".join(errors))
 
+    # Computed top-level number fields are never validated (so they're not in
+    # `validated`), but they may still be present in `data`. Skip them in the
+    # catch-all copy so client-submitted values can't pollute the input to
+    # `_recompute_expressions` and influence other expressions that reference
+    # them.
+    expr_components: list = []
+    _collect_expression_components(components, expr_components)
+    expr_ids = {c.get("id") for c in expr_components if c.get("id")}
+
     for k, v in data.items():
-        if k not in validated:
-            validated[k] = v
+        if k in validated or k in expr_ids:
+            continue
+        validated[k] = v
+
+    _recompute_expressions(components, validated)
 
     return validated

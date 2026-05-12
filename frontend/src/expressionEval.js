@@ -1,247 +1,343 @@
 /**
- * Safe expression evaluator for computed interview fields.
+ * Expression parser and evaluator for computed `number` components.
  *
- * Supports:
- *   - Arithmetic: +, -, *, /
- *   - Numeric literals: 42, 3.14
- *   - Field references: fieldId (top-level), group.child (repeat-group)
- *   - Aggregate functions: sum(), count(), avg(), min(), max()
- *   - round(expr, digits)
- *   - Parentheses for grouping
+ * Mirrors backend/expression_eval.py: same grammar, same semantics. Used to
+ * compute the value of number components that have an `expression` property.
  *
- * Mirrors the backend expression_eval.py — no eval().
+ * Grammar:
+ *   expression     = additive
+ *   additive       = multiplicative ( ("+" | "-") multiplicative )*
+ *   multiplicative = unary ( ("*" | "/") unary )*
+ *   unary          = "-" unary | primary
+ *   primary        = NUMBER | FUNCTION "(" argument ")" | field_ref | "(" expression ")"
+ *   field_ref      = IDENTIFIER ( "." IDENTIFIER )?
+ *   FUNCTION       = "sum" | "count" | "avg" | "min" | "max"
+ *
+ * Evaluation rules:
+ *   - Missing/empty values are treated as 0
+ *   - Division by zero returns 0
+ *   - No `eval()`; expressions are parsed and walked explicitly
+ *
+ * @typedef {{ type: 'num', value: number } |
+ *           { type: 'binop', op: string, left: any, right: any } |
+ *           { type: 'neg', operand: any } |
+ *           { type: 'field', path: string[] } |
+ *           { type: 'call', name: string, arg: any }} Node
  */
 
-const TOKEN_RE = /(\d+(?:\.\d+)?)|([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)|([+\-*/(),])/g
+const AGGREGATE_FUNCTIONS = new Set(['sum', 'count', 'avg', 'min', 'max'])
 
-const FUNCTIONS = new Set(['sum', 'count', 'avg', 'min', 'max', 'round'])
-const AGGREGATES = new Set(['sum', 'count', 'avg', 'min', 'max'])
+class ExpressionError extends Error {}
 
-function tokenise(expr) {
+// ---------------------------------------------------------------------------
+// Tokenizer
+// ---------------------------------------------------------------------------
+
+function tokenize(expr) {
   const tokens = []
-  let m
-  TOKEN_RE.lastIndex = 0
-  while ((m = TOKEN_RE.exec(expr)) !== null) {
-    if (m[1] !== undefined) tokens.push({ t: 'NUM', v: m[1] })
-    else if (m[2] !== undefined) tokens.push({ t: 'ID', v: m[2] })
-    else if (m[3] !== undefined) tokens.push({ t: 'OP', v: m[3] })
+  let i = 0
+  const n = expr.length
+  const isDigit = c => c >= '0' && c <= '9'
+  const isAlpha = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '_'
+  const isAlphaNum = c => isAlpha(c) || isDigit(c)
+
+  while (i < n) {
+    const c = expr[i]
+    if (c === ' ' || c === '\t' || c === '\n' || c === '\r') {
+      i++
+      continue
+    }
+    if (isDigit(c) || (c === '.' && i + 1 < n && isDigit(expr[i + 1]))) {
+      const start = i
+      let seenDot = false
+      while (i < n && (isDigit(expr[i]) || (expr[i] === '.' && !seenDot))) {
+        if (expr[i] === '.') seenDot = true
+        i++
+      }
+      tokens.push({ kind: 'NUMBER', value: parseFloat(expr.slice(start, i)), pos: start })
+      continue
+    }
+    if (isAlpha(c)) {
+      const start = i
+      while (i < n && isAlphaNum(expr[i])) i++
+      tokens.push({ kind: 'IDENT', value: expr.slice(start, i), pos: start })
+      continue
+    }
+    if (c === '+' || c === '-' || c === '*' || c === '/') {
+      tokens.push({ kind: 'OP', value: c, pos: i })
+      i++
+      continue
+    }
+    if (c === '(') { tokens.push({ kind: 'LPAREN', value: c, pos: i }); i++; continue }
+    if (c === ')') { tokens.push({ kind: 'RPAREN', value: c, pos: i }); i++; continue }
+    if (c === ',') { tokens.push({ kind: 'COMMA', value: c, pos: i }); i++; continue }
+    if (c === '.') { tokens.push({ kind: 'DOT', value: c, pos: i }); i++; continue }
+    throw new ExpressionError(`Unexpected character '${c}' at position ${i}`)
   }
+  tokens.push({ kind: 'EOF', value: null, pos: n })
   return tokens
 }
+
+// ---------------------------------------------------------------------------
+// Parser (recursive descent)
+// ---------------------------------------------------------------------------
 
 class Parser {
   constructor(tokens) {
     this.tokens = tokens
     this.pos = 0
   }
-
-  peek() { return this.pos < this.tokens.length ? this.tokens[this.pos] : null }
-  advance() { return this.tokens[this.pos++] }
-  expect(t, v) {
+  peek() { return this.tokens[this.pos] }
+  consume() { return this.tokens[this.pos++] }
+  expect(kind, value) {
     const tok = this.peek()
-    if (!tok || tok.t !== t || (v !== undefined && tok.v !== v))
-      throw new Error(`Expected '${v || t}', got '${tok ? tok.v : 'EOF'}'`)
-    return this.advance()
+    if (tok.kind !== kind || (value !== undefined && tok.value !== value)) {
+      const expected = value === undefined ? kind : `${kind} '${value}'`
+      throw new ExpressionError(
+        `Expected ${expected} at position ${tok.pos}, got ${tok.kind} '${tok.value}'`
+      )
+    }
+    return this.consume()
   }
 
-  parseExpr() {
-    let node = this.parseTerm()
-    while (true) {
+  parse() {
+    const node = this.parseExpression()
+    if (this.peek().kind !== 'EOF') {
       const tok = this.peek()
-      if (tok && tok.t === 'OP' && (tok.v === '+' || tok.v === '-')) {
-        const op = this.advance().v
-        node = { op, left: node, right: this.parseTerm() }
-      } else break
+      throw new ExpressionError(`Unexpected token '${tok.value}' at position ${tok.pos}`)
     }
     return node
   }
 
-  parseTerm() {
+  parseExpression() { return this.parseAdditive() }
+
+  parseAdditive() {
+    let node = this.parseMultiplicative()
+    while (this.peek().kind === 'OP' && (this.peek().value === '+' || this.peek().value === '-')) {
+      const op = this.consume().value
+      const right = this.parseMultiplicative()
+      node = { type: 'binop', op, left: node, right }
+    }
+    return node
+  }
+
+  parseMultiplicative() {
     let node = this.parseUnary()
-    while (true) {
-      const tok = this.peek()
-      if (tok && tok.t === 'OP' && (tok.v === '*' || tok.v === '/')) {
-        const op = this.advance().v
-        node = { op, left: node, right: this.parseUnary() }
-      } else break
+    while (this.peek().kind === 'OP' && (this.peek().value === '*' || this.peek().value === '/')) {
+      const op = this.consume().value
+      const right = this.parseUnary()
+      node = { type: 'binop', op, left: node, right }
     }
     return node
   }
 
   parseUnary() {
-    const tok = this.peek()
-    if (tok && tok.t === 'OP' && tok.v === '-') {
-      this.advance()
-      return { op: 'neg', operand: this.parseUnary() }
+    if (this.peek().kind === 'OP' && this.peek().value === '-') {
+      this.consume()
+      return { type: 'neg', operand: this.parseUnary() }
     }
-    return this.parseAtom()
+    if (this.peek().kind === 'OP' && this.peek().value === '+') {
+      this.consume()
+      return this.parseUnary()
+    }
+    return this.parsePrimary()
   }
 
-  parseAtom() {
+  parsePrimary() {
     const tok = this.peek()
-    if (!tok) throw new Error('Unexpected end of expression')
-
-    if (tok.t === 'NUM') {
-      this.advance()
-      return { lit: parseFloat(tok.v) }
+    if (tok.kind === 'NUMBER') {
+      this.consume()
+      return { type: 'num', value: tok.value }
     }
-
-    if (tok.t === 'ID') {
-      const name = tok.v
-      this.advance()
-      const nxt = this.peek()
-      if (nxt && nxt.t === 'OP' && nxt.v === '(') {
-        if (!FUNCTIONS.has(name)) throw new Error(`Unknown function '${name}'`)
-        this.advance() // consume '('
-        if (name === 'count') {
-          const arg = this.expect('ID')
-          this.expect('OP', ')')
-          return { func: 'count', group: arg.v }
-        }
-        if (name === 'round') {
-          const arg = this.parseExpr()
-          this.expect('OP', ',')
-          const digits = this.expect('NUM')
-          this.expect('OP', ')')
-          return { func: 'round', arg, digits: parseInt(digits.v) }
-        }
-        // sum/avg/min/max
-        const arg = this.parseExpr()
-        this.expect('OP', ')')
-        return { func: name, arg }
-      }
-      return { ref: name }
-    }
-
-    if (tok.t === 'OP' && tok.v === '(') {
-      this.advance()
-      const node = this.parseExpr()
-      this.expect('OP', ')')
+    if (tok.kind === 'LPAREN') {
+      this.consume()
+      const node = this.parseExpression()
+      this.expect('RPAREN')
       return node
     }
-
-    throw new Error(`Unexpected token '${tok.v}'`)
-  }
-}
-
-function toNum(v) {
-  if (v == null || v === '') return 0
-  const n = parseFloat(v)
-  return isNaN(n) ? 0 : n
-}
-
-function collectGroups(node) {
-  const groups = new Set()
-  if (node.ref && node.ref.includes('.')) groups.add(node.ref.split('.')[0])
-  if (node.left) { collectGroups(node.left).forEach(g => groups.add(g)); collectGroups(node.right).forEach(g => groups.add(g)) }
-  if (node.operand) collectGroups(node.operand).forEach(g => groups.add(g))
-  if (node.arg && typeof node.arg === 'object') collectGroups(node.arg).forEach(g => groups.add(g))
-  return groups
-}
-
-function evalRow(node, row, data) {
-  if ('lit' in node) return node.lit
-  if ('ref' in node) {
-    if (node.ref.includes('.')) {
-      const field = node.ref.split('.').slice(1).join('.')
-      return toNum(row[field])
+    if (tok.kind === 'IDENT') {
+      const name = this.consume().value
+      if (this.peek().kind === 'LPAREN') {
+        if (!AGGREGATE_FUNCTIONS.has(name)) {
+          throw new ExpressionError(`Unknown function '${name}' at position ${tok.pos}`)
+        }
+        this.consume()
+        const arg = this.parseExpression()
+        this.expect('RPAREN')
+        return { type: 'call', name, arg }
+      }
+      const path = [name]
+      while (this.peek().kind === 'DOT') {
+        this.consume()
+        const next = this.expect('IDENT')
+        path.push(next.value)
+      }
+      return { type: 'field', path }
     }
-    return toNum(data[node.ref])
+    throw new ExpressionError(`Unexpected token '${tok.value}' at position ${tok.pos}`)
   }
-  if ('op' in node) {
-    if (node.op === 'neg') return -evalRow(node.operand, row, data)
-    const l = evalRow(node.left, row, data)
-    const r = evalRow(node.right, row, data)
-    if (node.op === '+') return l + r
-    if (node.op === '-') return l - r
-    if (node.op === '*') return l * r
-    if (node.op === '/') return r !== 0 ? l / r : 0
+}
+
+function parse(expr) {
+  if (typeof expr !== 'string' || expr.trim() === '') {
+    throw new ExpressionError('Expression must be a non-empty string')
   }
-  if ('func' in node) return evalNode(node, data)
+  return new Parser(tokenize(expr)).parse()
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation
+// ---------------------------------------------------------------------------
+
+function coerceNumber(v) {
+  if (v === null || v === undefined) return 0
+  if (typeof v === 'boolean') return v ? 1 : 0
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (s === '') return 0
+    const n = Number(s)
+    return Number.isFinite(n) ? n : 0
+  }
   return 0
+}
+
+function resolveField(path, data) {
+  if (!path || path.length === 0) return null
+  if (data === null || typeof data !== 'object') return null
+
+  if (path.length === 1) {
+    const v = data[path[0]]
+    return v === undefined ? null : v
+  }
+
+  const head = path[0]
+  const rest = path.slice(1)
+  const container = data[head]
+  if (container === undefined || container === null) return []
+  if (Array.isArray(container)) {
+    return container.map(item => {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        let cur = item
+        for (const key of rest) {
+          if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
+            cur = cur[key]
+          } else {
+            cur = null
+            break
+          }
+        }
+        return cur === undefined ? null : cur
+      }
+      return null
+    })
+  }
+  if (typeof container === 'object') {
+    let cur = container
+    for (const key of rest) {
+      if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
+        cur = cur[key]
+      } else {
+        return null
+      }
+    }
+    return cur === undefined ? null : cur
+  }
+  return null
+}
+
+function toArray(v) {
+  if (v === null || v === undefined) return []
+  if (Array.isArray(v)) return v
+  return [v]
 }
 
 function evalNode(node, data) {
-  if ('lit' in node) return node.lit
-  if ('ref' in node) {
-    if (node.ref.includes('.')) return 0 // dotted ref outside aggregate
-    return toNum(data[node.ref])
-  }
-  if ('op' in node) {
-    if (node.op === 'neg') return -evalNode(node.operand, data)
-    const l = evalNode(node.left, data)
-    const r = evalNode(node.right, data)
-    if (node.op === '+') return l + r
-    if (node.op === '-') return l - r
-    if (node.op === '*') return l * r
-    if (node.op === '/') return r !== 0 ? l / r : 0
-  }
-  if ('func' in node) {
-    const { func } = node
-    if (func === 'count') {
-      const items = data[node.group]
-      return Array.isArray(items) ? items.length : 0
+  switch (node.type) {
+    case 'num':
+      return node.value
+    case 'neg': {
+      const v = evalNode(node.operand, data)
+      if (Array.isArray(v)) return v.map(x => -coerceNumber(x))
+      return -coerceNumber(v)
     }
-    if (func === 'round') {
-      const val = evalNode(node.arg, data)
-      const factor = Math.pow(10, node.digits)
-      return Math.round(val * factor) / factor
+    case 'binop': {
+      const left = evalNode(node.left, data)
+      const right = evalNode(node.right, data)
+      return applyBinop(node.op, left, right)
     }
-    // sum/avg/min/max
-    const groups = collectGroups(node.arg)
-    if (groups.size === 0) return 0
-    const groupName = [...groups][0]
-    const items = data[groupName]
-    if (!Array.isArray(items) || items.length === 0) return 0
-    const values = items.map(row => evalRow(node.arg, row, data))
-    if (func === 'sum') return values.reduce((a, b) => a + b, 0)
-    if (func === 'avg') return values.reduce((a, b) => a + b, 0) / values.length
-    if (func === 'min') return Math.min(...values)
-    if (func === 'max') return Math.max(...values)
+    case 'field':
+      return resolveField(node.path, data)
+    case 'call':
+      return applyAggregate(node.name, evalNode(node.arg, data))
+    default:
+      throw new ExpressionError(`Unknown node type: ${node.type}`)
   }
-  return 0
 }
 
-export function evaluateExpression(expr, data) {
-  try {
-    const tokens = tokenise(expr)
-    if (tokens.length === 0) return null
-    const parser = new Parser(tokens)
-    const ast = parser.parseExpr()
-    return evalNode(ast, data)
-  } catch {
-    return null
+function applyBinop(op, left, right) {
+  const leftIsArr = Array.isArray(left)
+  const rightIsArr = Array.isArray(right)
+  if (leftIsArr || rightIsArr) {
+    if (leftIsArr && rightIsArr) {
+      const length = Math.min(left.length, right.length)
+      const out = new Array(length)
+      for (let i = 0; i < length; i++) out[i] = scalarOp(op, left[i], right[i])
+      return out
+    }
+    if (leftIsArr) return left.map(x => scalarOp(op, x, right))
+    return right.map(x => scalarOp(op, left, x))
+  }
+  return scalarOp(op, left, right)
+}
+
+function scalarOp(op, a, b) {
+  const x = coerceNumber(a)
+  const y = coerceNumber(b)
+  switch (op) {
+    case '+': return x + y
+    case '-': return x - y
+    case '*': return x * y
+    case '/': return y === 0 ? 0 : x / y
+    default: throw new ExpressionError(`Unknown operator: ${op}`)
+  }
+}
+
+function applyAggregate(name, arg) {
+  const items = toArray(arg)
+  const nums = items.map(coerceNumber)
+  if (name === 'count') return items.length
+  if (nums.length === 0) return 0
+  switch (name) {
+    case 'sum': return nums.reduce((a, b) => a + b, 0)
+    case 'avg': return nums.reduce((a, b) => a + b, 0) / nums.length
+    case 'min': return Math.min(...nums)
+    case 'max': return Math.max(...nums)
+    default: throw new ExpressionError(`Unknown function: ${name}`)
   }
 }
 
 /**
- * Evaluate all computed fields in a component list and return updated data.
+ * Parse and evaluate `expression` against form `data`.
+ *
+ * @param {string} expression - The expression to evaluate.
+ * @param {object} data - The full form data object.
+ * @returns {number | null} The numeric result, or null if the expression
+ *     cannot be parsed.
  */
-export function evaluateComputedFields(components, data) {
-  const result = { ...data }
-  evalComponents(components, result)
-  return result
-}
-
-function evalComponents(components, data) {
-  for (const comp of components) {
-    if (comp.type === 'dialog') {
-      evalComponents(comp.components || [], data)
-    } else if (comp.type === 'repeat') {
-      const items = data[comp.id]
-      if (Array.isArray(items)) {
-        for (const row of items) {
-          for (const child of (comp.components || [])) {
-            if (child.type === 'number' && child.expression) {
-              const val = evaluateExpression(child.expression, { ...data, ...row })
-              if (val !== null) row[child.id] = val
-            }
-          }
-        }
-      }
-    } else if (comp.type === 'number' && comp.expression) {
-      const val = evaluateExpression(comp.expression, data)
-      if (val !== null) data[comp.id] = val
-    }
+export function evaluateExpression(expression, data) {
+  let ast
+  try {
+    ast = parse(expression)
+  } catch (e) {
+    return null
   }
+  if (data === null || typeof data !== 'object') data = {}
+  const result = evalNode(ast, data)
+  if (Array.isArray(result)) {
+    let total = 0
+    for (const x of result) total += coerceNumber(x)
+    return total
+  }
+  return coerceNumber(result)
 }

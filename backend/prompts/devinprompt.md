@@ -91,6 +91,70 @@ For monetary amounts, quantities, percentages, measurements, counts.
 * Set sensible `min`/`max` bounds where the domain implies them.
 * For totals or computed values: use the `expression` property instead of making the user enter the value manually. See the Computed Fields section below.
 
+#### Computed `number` fields — `expression`
+
+A `number` component can declare an `expression` that derives its value from other fields. The field becomes read-only on the frontend and is recomputed server-side on submission, so the client value is never trusted.
+
+|Property|Type|Default|Description|
+|-|-|-|-|
+|`expression`|string|—|An expression that evaluates to a number. When set, the field is computed automatically and rendered as read-only.|
+
+**Available functions** (operate on arrays from repeat groups):
+
+* `sum(array)` — sum of all values
+* `count(array)` — number of items
+* `avg(array)` — average
+* `min(array)` — minimum value
+* `max(array)` — maximum value
+
+**Arithmetic:** `+`, `-`, `*`, `/`, parentheses for grouping, numeric literals (e.g. `0.2`, `100`). Element-wise arithmetic on arrays is supported, e.g. `line_items.quantity * line_items.unit_price` produces `[q1*p1, q2*p2, ...]`.
+
+**Field references:**
+
+* `field_id` — value of a top-level field
+* `repeat_id.field_id` — array of values from a repeat group's child field
+* `repeat_id` alone (in `count()`) — the array itself
+
+**Evaluation rules:** missing/empty values are treated as `0`; division by zero returns `0`; expressions are parsed (never `eval`'d).
+
+**Example expressions:**
+
+```jsonc
+// Total of a repeat group's prices
+{ "type":"number", "id":"total", "label":"Total",
+  "expression":"sum(line_items.price)",
+  "decimalPlaces":2, "prefix":"£" }
+
+// Subtotal as quantity × unit price across line items
+{ "type":"number", "id":"subtotal", "label":"Subtotal",
+  "expression":"sum(line_items.quantity * line_items.unit_price)",
+  "decimalPlaces":2, "prefix":"£" }
+
+// VAT at 20%
+{ "type":"number", "id":"vat_amount", "label":"VAT (20%)",
+  "expression":"subtotal * 0.2",
+  "decimalPlaces":2, "prefix":"£" }
+
+// Total = subtotal + VAT
+{ "type":"number", "id":"total_due", "label":"Total due",
+  "expression":"subtotal + vat_amount",
+  "decimalPlaces":2, "prefix":"£" }
+
+// Average score across an evaluation panel
+{ "type":"number", "id":"avg_score", "label":"Average score",
+  "expression":"avg(reviewers.score)",
+  "decimalPlaces":1 }
+```
+
+**Guidance for computed fields:**
+
+* Always set `decimalPlaces` (and `prefix`/`suffix` where relevant) on computed currency fields so the displayed value is formatted correctly.
+* Do **NOT** set `required:true` on computed fields — their value is always derived.
+* The following properties are **ignored** on computed fields and should be omitted: `step`, `min`, `max`, `integerOnly`, `placeholder`, `defaultValue`. The field is rendered as a read-only text input and its value is recomputed server-side, so input-granularity hints and value constraints have no effect.
+* Computed fields still need a `{{placeholder}}` in the document if you want the value to appear there.
+* Field ids referenced in an expression must match real component ids in the same interview (top-level or inside a repeat/dialog).
+* Use `expression` for any number a user would otherwise compute by hand — totals, subtotals, taxes, averages, counts, conversions.
+
 \---
 
 ### `datetime` — Date / Time Input
