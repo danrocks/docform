@@ -5,8 +5,25 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from config import settings
-from models import Base, Role, Tenant, User
-from repositories.base import RoleRepository, TenantRepository, UserRepository
+from models import (
+    Base,
+    Role,
+    Tenant,
+    TemplateSettings,
+    User,
+    Workgroup,
+    WorkgroupTemplate,
+    WorkgroupUser,
+)
+from repositories.base import (
+    RoleRepository,
+    TemplateSettingsRepository,
+    TenantRepository,
+    UserRepository,
+    WorkgroupRepository,
+    WorkgroupTemplateRepository,
+    WorkgroupUserRepository,
+)
 
 
 @lru_cache(maxsize=1)
@@ -180,6 +197,186 @@ class DbTenantRepository(TenantRepository):
     def count(self) -> int:
         with get_session() as session:
             return session.query(Tenant).count()
+
+
+class DbWorkgroupRepository(WorkgroupRepository):
+    def get_all(self, tenant_id: str = None) -> list[dict]:
+        with get_session() as session:
+            q = session.query(Workgroup)
+            if tenant_id is not None:
+                q = q.filter(Workgroup.tenant_id == tenant_id)
+            return [w.to_dict() for w in q.order_by(Workgroup.name).all()]
+
+    def get_by_id(self, workgroup_id: str) -> Optional[dict]:
+        with get_session() as session:
+            wg = session.get(Workgroup, workgroup_id)
+            return wg.to_dict() if wg else None
+
+    def create(self, workgroup: dict) -> dict:
+        with get_session() as session:
+            db_wg = Workgroup(**workgroup)
+            session.add(db_wg)
+            session.commit()
+            session.refresh(db_wg)
+            return db_wg.to_dict()
+
+    def update(self, workgroup_id: str, data: dict) -> Optional[dict]:
+        with get_session() as session:
+            wg = session.get(Workgroup, workgroup_id)
+            if not wg:
+                return None
+            for key, value in data.items():
+                setattr(wg, key, value)
+            session.commit()
+            session.refresh(wg)
+            return wg.to_dict()
+
+    def delete(self, workgroup_id: str) -> bool:
+        with get_session() as session:
+            wg = session.get(Workgroup, workgroup_id)
+            if not wg:
+                return False
+            session.delete(wg)
+            session.commit()
+            return True
+
+    def count(self, tenant_id: str = None) -> int:
+        with get_session() as session:
+            q = session.query(Workgroup)
+            if tenant_id is not None:
+                q = q.filter(Workgroup.tenant_id == tenant_id)
+            return q.count()
+
+    def get_paginated(self, skip: int = 0, limit: int = 20, tenant_id: str = None) -> list[dict]:
+        with get_session() as session:
+            q = session.query(Workgroup).order_by(Workgroup.name)
+            if tenant_id is not None:
+                q = q.filter(Workgroup.tenant_id == tenant_id)
+            return [w.to_dict() for w in q.offset(skip).limit(limit).all()]
+
+
+class DbTemplateSettingsRepository(TemplateSettingsRepository):
+    def get_by_template_id(self, template_id: str) -> Optional[dict]:
+        with get_session() as session:
+            ts = session.get(TemplateSettings, template_id)
+            return ts.to_dict() if ts else None
+
+    def create(self, settings_obj: dict) -> dict:
+        with get_session() as session:
+            db_ts = TemplateSettings(**settings_obj)
+            session.add(db_ts)
+            session.commit()
+            session.refresh(db_ts)
+            return db_ts.to_dict()
+
+    def update(self, template_id: str, data: dict) -> Optional[dict]:
+        with get_session() as session:
+            ts = session.get(TemplateSettings, template_id)
+            if not ts:
+                return None
+            for key, value in data.items():
+                setattr(ts, key, value)
+            session.commit()
+            session.refresh(ts)
+            return ts.to_dict()
+
+    def delete(self, template_id: str) -> bool:
+        with get_session() as session:
+            ts = session.get(TemplateSettings, template_id)
+            if not ts:
+                return False
+            session.delete(ts)
+            session.commit()
+            return True
+
+    def get_restricted_templates(self, tenant_id: str = None) -> list[dict]:
+        with get_session() as session:
+            q = session.query(TemplateSettings).filter(
+                TemplateSettings.restricted_to_workgroups.is_(True)
+            )
+            if tenant_id is not None:
+                q = q.filter(TemplateSettings.tenant_id == tenant_id)
+            return [ts.to_dict() for ts in q.all()]
+
+
+class DbWorkgroupTemplateRepository(WorkgroupTemplateRepository):
+    def add_template(self, workgroup_id: str, template_id: str) -> dict:
+        with get_session() as session:
+            existing = session.get(WorkgroupTemplate, (workgroup_id, template_id))
+            if existing:
+                return existing.to_dict()
+            link = WorkgroupTemplate(workgroup_id=workgroup_id, template_id=template_id)
+            session.add(link)
+            session.commit()
+            session.refresh(link)
+            return link.to_dict()
+
+    def remove_template(self, workgroup_id: str, template_id: str) -> bool:
+        with get_session() as session:
+            link = session.get(WorkgroupTemplate, (workgroup_id, template_id))
+            if not link:
+                return False
+            session.delete(link)
+            session.commit()
+            return True
+
+    def get_workgroup_templates(self, workgroup_id: str) -> list[dict]:
+        with get_session() as session:
+            rows = (
+                session.query(WorkgroupTemplate)
+                .filter(WorkgroupTemplate.workgroup_id == workgroup_id)
+                .all()
+            )
+            return [r.to_dict() for r in rows]
+
+    def get_template_workgroups(self, template_id: str) -> list[dict]:
+        with get_session() as session:
+            rows = (
+                session.query(WorkgroupTemplate)
+                .filter(WorkgroupTemplate.template_id == template_id)
+                .all()
+            )
+            return [r.to_dict() for r in rows]
+
+
+class DbWorkgroupUserRepository(WorkgroupUserRepository):
+    def add_user(self, workgroup_id: str, user_id: str) -> dict:
+        with get_session() as session:
+            existing = session.get(WorkgroupUser, (workgroup_id, user_id))
+            if existing:
+                return existing.to_dict()
+            link = WorkgroupUser(workgroup_id=workgroup_id, user_id=user_id)
+            session.add(link)
+            session.commit()
+            session.refresh(link)
+            return link.to_dict()
+
+    def remove_user(self, workgroup_id: str, user_id: str) -> bool:
+        with get_session() as session:
+            link = session.get(WorkgroupUser, (workgroup_id, user_id))
+            if not link:
+                return False
+            session.delete(link)
+            session.commit()
+            return True
+
+    def get_workgroup_users(self, workgroup_id: str) -> list[dict]:
+        with get_session() as session:
+            rows = (
+                session.query(WorkgroupUser)
+                .filter(WorkgroupUser.workgroup_id == workgroup_id)
+                .all()
+            )
+            return [r.to_dict() for r in rows]
+
+    def get_user_workgroups(self, user_id: str) -> list[dict]:
+        with get_session() as session:
+            rows = (
+                session.query(WorkgroupUser)
+                .filter(WorkgroupUser.user_id == user_id)
+                .all()
+            )
+            return [r.to_dict() for r in rows]
 
 
 def create_tables() -> None:

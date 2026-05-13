@@ -22,11 +22,19 @@ def tmp_data_dir(tmp_path, monkeypatch):
     roles_file = tmp_path / "roles.json"
     users_file = tmp_path / "users.json"
     tenants_file = tmp_path / "tenants.json"
+    workgroups_file = tmp_path / "workgroups.json"
+    template_settings_file = tmp_path / "template_settings.json"
+    workgroup_templates_file = tmp_path / "workgroup_templates.json"
+    workgroup_users_file = tmp_path / "workgroup_users.json"
 
     import repositories.json_repo as jr
     monkeypatch.setattr(jr, "ROLES_FILE", roles_file)
     monkeypatch.setattr(jr, "USERS_FILE", users_file)
     monkeypatch.setattr(jr, "TENANTS_FILE", tenants_file)
+    monkeypatch.setattr(jr, "WORKGROUPS_FILE", workgroups_file)
+    monkeypatch.setattr(jr, "TEMPLATE_SETTINGS_FILE", template_settings_file)
+    monkeypatch.setattr(jr, "WORKGROUP_TEMPLATES_FILE", workgroup_templates_file)
+    monkeypatch.setattr(jr, "WORKGROUP_USERS_FILE", workgroup_users_file)
 
     import rate_limit
     rate_limit._attempts.clear()

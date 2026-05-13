@@ -2,11 +2,23 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from repositories.base import RoleRepository, TenantRepository, UserRepository
+from repositories.base import (
+    RoleRepository,
+    TemplateSettingsRepository,
+    TenantRepository,
+    UserRepository,
+    WorkgroupRepository,
+    WorkgroupTemplateRepository,
+    WorkgroupUserRepository,
+)
 
 USERS_FILE = Path("data/users.json")
 ROLES_FILE = Path("data/roles.json")
 TENANTS_FILE = Path("data/tenants.json")
+WORKGROUPS_FILE = Path("data/workgroups.json")
+TEMPLATE_SETTINGS_FILE = Path("data/template_settings.json")
+WORKGROUP_TEMPLATES_FILE = Path("data/workgroup_templates.json")
+WORKGROUP_USERS_FILE = Path("data/workgroup_users.json")
 
 
 class JsonUserRepository(UserRepository):
@@ -162,3 +174,189 @@ class JsonTenantRepository(TenantRepository):
 
     def count(self) -> int:
         return len(self._read())
+
+
+class JsonWorkgroupRepository(WorkgroupRepository):
+    def _read(self) -> list[dict]:
+        if not WORKGROUPS_FILE.exists():
+            return []
+        return json.loads(WORKGROUPS_FILE.read_text())
+
+    def _write(self, items: list[dict]) -> None:
+        WORKGROUPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        WORKGROUPS_FILE.write_text(json.dumps(items, indent=2))
+
+    def get_all(self, tenant_id: str = None) -> list[dict]:
+        items = self._read()
+        if tenant_id is not None:
+            items = [w for w in items if w.get("tenant_id") == tenant_id]
+        return sorted(items, key=lambda w: w.get("name", ""))
+
+    def get_by_id(self, workgroup_id: str) -> Optional[dict]:
+        return next((w for w in self._read() if w["id"] == workgroup_id), None)
+
+    def create(self, workgroup: dict) -> dict:
+        items = self._read()
+        items.append(workgroup)
+        self._write(items)
+        return workgroup
+
+    def update(self, workgroup_id: str, data: dict) -> Optional[dict]:
+        items = self._read()
+        for i, w in enumerate(items):
+            if w["id"] == workgroup_id:
+                items[i].update(data)
+                self._write(items)
+                return items[i]
+        return None
+
+    def delete(self, workgroup_id: str) -> bool:
+        items = self._read()
+        new_items = [w for w in items if w["id"] != workgroup_id]
+        if len(new_items) == len(items):
+            return False
+        self._write(new_items)
+
+        # CASCADE: remove workgroup_templates and workgroup_users entries
+        wt_repo = JsonWorkgroupTemplateRepository()
+        wt_items = wt_repo._read()
+        wt_repo._write([r for r in wt_items if r.get("workgroup_id") != workgroup_id])
+
+        wu_repo = JsonWorkgroupUserRepository()
+        wu_items = wu_repo._read()
+        wu_repo._write([r for r in wu_items if r.get("workgroup_id") != workgroup_id])
+        return True
+
+    def count(self, tenant_id: str = None) -> int:
+        items = self._read()
+        if tenant_id is not None:
+            items = [w for w in items if w.get("tenant_id") == tenant_id]
+        return len(items)
+
+    def get_paginated(self, skip: int = 0, limit: int = 20, tenant_id: str = None) -> list[dict]:
+        items = self.get_all(tenant_id=tenant_id)
+        return items[skip:skip + limit]
+
+
+class JsonTemplateSettingsRepository(TemplateSettingsRepository):
+    def _read(self) -> list[dict]:
+        if not TEMPLATE_SETTINGS_FILE.exists():
+            return []
+        return json.loads(TEMPLATE_SETTINGS_FILE.read_text())
+
+    def _write(self, items: list[dict]) -> None:
+        TEMPLATE_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        TEMPLATE_SETTINGS_FILE.write_text(json.dumps(items, indent=2))
+
+    def get_by_template_id(self, template_id: str) -> Optional[dict]:
+        return next((s for s in self._read() if s["template_id"] == template_id), None)
+
+    def create(self, settings: dict) -> dict:
+        items = self._read()
+        items.append(settings)
+        self._write(items)
+        return settings
+
+    def update(self, template_id: str, data: dict) -> Optional[dict]:
+        items = self._read()
+        for i, s in enumerate(items):
+            if s["template_id"] == template_id:
+                items[i].update(data)
+                self._write(items)
+                return items[i]
+        return None
+
+    def delete(self, template_id: str) -> bool:
+        items = self._read()
+        new_items = [s for s in items if s["template_id"] != template_id]
+        if len(new_items) == len(items):
+            return False
+        self._write(new_items)
+
+        # CASCADE: remove workgroup_templates entries for this template
+        wt_repo = JsonWorkgroupTemplateRepository()
+        wt_items = wt_repo._read()
+        wt_repo._write([r for r in wt_items if r.get("template_id") != template_id])
+        return True
+
+    def get_restricted_templates(self, tenant_id: str = None) -> list[dict]:
+        items = [s for s in self._read() if s.get("restricted_to_workgroups")]
+        if tenant_id is not None:
+            items = [s for s in items if s.get("tenant_id") == tenant_id]
+        return items
+
+
+class JsonWorkgroupTemplateRepository(WorkgroupTemplateRepository):
+    def _read(self) -> list[dict]:
+        if not WORKGROUP_TEMPLATES_FILE.exists():
+            return []
+        return json.loads(WORKGROUP_TEMPLATES_FILE.read_text())
+
+    def _write(self, items: list[dict]) -> None:
+        WORKGROUP_TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        WORKGROUP_TEMPLATES_FILE.write_text(json.dumps(items, indent=2))
+
+    def add_template(self, workgroup_id: str, template_id: str) -> dict:
+        items = self._read()
+        for r in items:
+            if r["workgroup_id"] == workgroup_id and r["template_id"] == template_id:
+                return r
+        entry = {"workgroup_id": workgroup_id, "template_id": template_id}
+        items.append(entry)
+        self._write(items)
+        return entry
+
+    def remove_template(self, workgroup_id: str, template_id: str) -> bool:
+        items = self._read()
+        new_items = [
+            r for r in items
+            if not (r["workgroup_id"] == workgroup_id and r["template_id"] == template_id)
+        ]
+        if len(new_items) == len(items):
+            return False
+        self._write(new_items)
+        return True
+
+    def get_workgroup_templates(self, workgroup_id: str) -> list[dict]:
+        return [r for r in self._read() if r["workgroup_id"] == workgroup_id]
+
+    def get_template_workgroups(self, template_id: str) -> list[dict]:
+        return [r for r in self._read() if r["template_id"] == template_id]
+
+
+class JsonWorkgroupUserRepository(WorkgroupUserRepository):
+    def _read(self) -> list[dict]:
+        if not WORKGROUP_USERS_FILE.exists():
+            return []
+        return json.loads(WORKGROUP_USERS_FILE.read_text())
+
+    def _write(self, items: list[dict]) -> None:
+        WORKGROUP_USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        WORKGROUP_USERS_FILE.write_text(json.dumps(items, indent=2))
+
+    def add_user(self, workgroup_id: str, user_id: str) -> dict:
+        items = self._read()
+        for r in items:
+            if r["workgroup_id"] == workgroup_id and r["user_id"] == user_id:
+                return r
+        entry = {"workgroup_id": workgroup_id, "user_id": user_id}
+        items.append(entry)
+        self._write(items)
+        return entry
+
+    def remove_user(self, workgroup_id: str, user_id: str) -> bool:
+        items = self._read()
+        new_items = [
+            r for r in items
+            if not (r["workgroup_id"] == workgroup_id and r["user_id"] == user_id)
+        ]
+        if len(new_items) == len(items):
+            return False
+        self._write(new_items)
+        return True
+
+    def get_workgroup_users(self, workgroup_id: str) -> list[dict]:
+        return [r for r in self._read() if r["workgroup_id"] == workgroup_id]
+
+    def get_user_workgroups(self, user_id: str) -> list[dict]:
+        return [r for r in self._read() if r["user_id"] == user_id]

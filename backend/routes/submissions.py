@@ -17,26 +17,49 @@ from file_utils import (
     TEMPLATE_INTERVIEW_FILENAME,
     TEMPLATE_DOCX_FILENAME,
     get_tenant_data_dir,
+    get_workgroup_subdir,
     atomic_write_json,
     utcnow_iso,
+)
+from repositories.factory import (
+    get_template_settings_repository,
+    get_workgroup_repository,
+    get_workgroup_template_repository,
+    get_workgroup_user_repository,
 )
 
 router = APIRouter()
 
 
-def get_submissions_dir(request: Request) -> Path:
-    return get_tenant_data_dir(request, "data", "submissions")
+def get_submissions_dir(request: Request, workgroup_id: Optional[str] = None) -> Path:
+    base = get_tenant_data_dir(request, "data", "submissions")
+    if workgroup_id:
+        return get_workgroup_subdir(base, workgroup_id)
+    return base
 
 
 def get_templates_dir(request: Request) -> Path:
     return get_tenant_data_dir(request, "data", "templates")
 
 
-def get_generated_dir(request: Request) -> Path:
-    return get_tenant_data_dir(request, "uploads", "generated")
+def get_generated_dir(request: Request, workgroup_id: Optional[str] = None) -> Path:
+    base = get_tenant_data_dir(request, "uploads", "generated")
+    if workgroup_id:
+        return get_workgroup_subdir(base, workgroup_id)
+    return base
 
 
-def read_submissions(submissions_dir: Path, filter_template: str = None, filter_user: str = None, role: str = None) -> list:
+def read_submissions(
+    submissions_dir: Path,
+    filter_template: str = None,
+    filter_user: str = None,
+    role: str = None,
+    workgroup_id: Optional[str] = None,
+) -> list:
+    if workgroup_id:
+        submissions_dir = submissions_dir / "workgroups" / workgroup_id
+        if not submissions_dir.exists():
+            return []
     out = []
     for f in submissions_dir.glob("*.json"):
         try:
@@ -55,29 +78,80 @@ class SubmissionCreate(BaseModel):
     template_id: str
     data: dict
     context: Optional[str] = ""
+    workgroup_id: Optional[str] = None
 
 
 @router.get("/")
 def list_submissions(
     request: Request,
     template_id: Optional[str] = None,
+    workgroup_id: Optional[str] = None,
     current_user: dict = Depends(verify_tenant_match),
 ):
     submissions_dir = get_submissions_dir(request)
     user_id = current_user["id"] if current_user["role"] == "staff" else None
-    return read_submissions(submissions_dir, filter_template=template_id, filter_user=user_id, role=current_user["role"])
+    return read_submissions(
+        submissions_dir,
+        filter_template=template_id,
+        filter_user=user_id,
+        role=current_user["role"],
+        workgroup_id=workgroup_id,
+    )
+
+
+def _find_submission_path(
+    request: Request, submission_id: str
+) -> tuple[Path, Optional[str]]:
+    """Locate a submission JSON file. Returns (path, workgroup_id)."""
+    base = get_submissions_dir(request)
+    root_path = base / f"{submission_id}.json"
+    if root_path.exists():
+        return root_path, None
+    workgroups_root = base / "workgroups"
+    if workgroups_root.exists():
+        for wg_dir in workgroups_root.iterdir():
+            if not wg_dir.is_dir():
+                continue
+            candidate = wg_dir / f"{submission_id}.json"
+            if candidate.exists():
+                return candidate, wg_dir.name
+    raise HTTPException(status_code=404, detail="Submission not found")
 
 
 @router.get("/{submission_id}")
 def get_submission(submission_id: str, request: Request, current_user: dict = Depends(verify_tenant_match)):
-    submissions_dir = get_submissions_dir(request)
-    path = submissions_dir / f"{submission_id}.json"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Submission not found")
+    path, _ = _find_submission_path(request, submission_id)
     sub = json.loads(path.read_text())
     if current_user["role"] == "staff" and sub["submitted_by"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Access denied")
     return sub
+
+
+def _user_has_template_access(
+    template_id: str,
+    current_user: dict,
+    tenant_id: Optional[str],
+) -> bool:
+    """Apply workgroup-based template visibility rules.
+
+    Returns True when the user is allowed to use *template_id*. Admins can
+    always access tenant templates; staff/approvers are restricted to
+    workgroup-allowed templates when ``restricted_to_workgroups`` is enabled.
+    """
+    if current_user.get("role") == "admin":
+        return True
+    settings_entry = get_template_settings_repository().get_by_template_id(template_id)
+    if not settings_entry or not settings_entry.get("restricted_to_workgroups"):
+        return True
+    if tenant_id is not None and settings_entry.get("tenant_id") != tenant_id:
+        return False
+    user_links = get_workgroup_user_repository().get_user_workgroups(current_user["id"])
+    user_workgroup_ids = {r["workgroup_id"] for r in user_links}
+    if not user_workgroup_ids:
+        return False
+    template_links = get_workgroup_template_repository().get_template_workgroups(template_id)
+    template_workgroup_ids = {r["workgroup_id"] for r in template_links}
+    return bool(user_workgroup_ids & template_workgroup_ids)
 
 
 @router.post("/")
@@ -87,8 +161,24 @@ def create_submission(
     current_user: dict = Depends(verify_tenant_match),
 ):
     templates_dir = get_templates_dir(request)
-    submissions_dir = get_submissions_dir(request)
-    generated_dir = get_generated_dir(request)
+
+    workgroup = None
+    if body.workgroup_id:
+        workgroup = get_workgroup_repository().get_by_id(body.workgroup_id)
+        if not workgroup or workgroup.get("tenant_id") != current_user.get("tenant_id"):
+            raise HTTPException(status_code=404, detail="Workgroup not found")
+        if current_user["role"] not in ("admin",):
+            user_links = get_workgroup_user_repository().get_user_workgroups(current_user["id"])
+            if body.workgroup_id not in {r["workgroup_id"] for r in user_links}:
+                raise HTTPException(status_code=403, detail="Not a member of this workgroup")
+
+    if not _user_has_template_access(
+        body.template_id, current_user, current_user.get("tenant_id")
+    ):
+        raise HTTPException(status_code=403, detail="Template not available")
+
+    submissions_dir = get_submissions_dir(request, workgroup_id=body.workgroup_id)
+    generated_dir = get_generated_dir(request, workgroup_id=body.workgroup_id)
 
     # Per-template subdirectory layout (#8)
     template_dir = templates_dir / body.template_id
@@ -111,6 +201,8 @@ def create_submission(
     submission_id = str(uuid.uuid4())
     now = utcnow_iso()
 
+    requires_approval = bool(workgroup["requires_approval"]) if workgroup else False
+
     # Store interview version for traceability (#4)
     submission = {
         "id": submission_id,
@@ -120,6 +212,8 @@ def create_submission(
         "data": validated_data,
         "context": body.context,
         "status": "pending",
+        "workgroup_id": body.workgroup_id,
+        "requires_approval": requires_approval,
         "submitted_by": current_user["id"],
         "submitted_by_name": current_user["name"],
         "submitted_at": now,
@@ -181,13 +275,15 @@ def approve_submission(
     request: Request,
     current_user: dict = Depends(verify_tenant_match),
 ):
-    if current_user["role"] not in ("admin", "approver", "superadmin"):
+    if current_user["role"] not in ("admin", "approver"):
         raise HTTPException(status_code=403, detail="Not permitted")
-    submissions_dir = get_submissions_dir(request)
-    path = submissions_dir / f"{submission_id}.json"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Submission not found")
+    path, _ = _find_submission_path(request, submission_id)
     sub = json.loads(path.read_text())
+    wg_id = sub.get("workgroup_id")
+    if wg_id:
+        wg = get_workgroup_repository().get_by_id(wg_id)
+        if wg and not wg.get("requires_approval"):
+            sub["requires_approval"] = False
     sub["status"] = "approved"
     sub["approved_by"] = current_user["id"]
     sub["approved_by_name"] = current_user["name"]
@@ -203,12 +299,9 @@ def reject_submission(
     request: Request,
     current_user: dict = Depends(verify_tenant_match),
 ):
-    if current_user["role"] not in ("admin", "approver", "superadmin"):
+    if current_user["role"] not in ("admin", "approver"):
         raise HTTPException(status_code=403, detail="Not permitted")
-    submissions_dir = get_submissions_dir(request)
-    path = submissions_dir / f"{submission_id}.json"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Submission not found")
+    path, _ = _find_submission_path(request, submission_id)
     sub = json.loads(path.read_text())
     sub["status"] = "rejected"
     sub["rejection_reason"] = body.get("reason", "")
@@ -228,10 +321,7 @@ def download_document(
     if format not in ("docx", "pdf"):
         raise HTTPException(status_code=400, detail="Format must be docx or pdf")
 
-    submissions_dir = get_submissions_dir(request)
-    path = submissions_dir / f"{submission_id}.json"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Submission not found")
+    path, _ = _find_submission_path(request, submission_id)
     sub = json.loads(path.read_text())
 
     if current_user["role"] == "staff" and sub["submitted_by"] != current_user["id"]:

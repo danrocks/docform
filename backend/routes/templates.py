@@ -200,11 +200,48 @@ def ai_status(current_user: dict = Depends(verify_tenant_match)):
         return {"available": False}
 
 
+def _filter_templates_by_workgroup(templates: list, current_user: dict) -> list:
+    """Hide templates restricted to workgroups the user doesn't belong to.
+
+    Admins see every template. For other roles we drop templates whose
+    TemplateSettings entry has ``restricted_to_workgroups=True`` unless the
+    user belongs to a workgroup that includes the template.
+    """
+    if current_user.get("role") == "admin":
+        return templates
+
+    from repositories.factory import (
+        get_template_settings_repository,
+        get_workgroup_template_repository,
+        get_workgroup_user_repository,
+    )
+    ts_repo = get_template_settings_repository()
+    wt_repo = get_workgroup_template_repository()
+    wu_repo = get_workgroup_user_repository()
+
+    user_workgroup_ids = {
+        r["workgroup_id"] for r in wu_repo.get_user_workgroups(current_user["id"])
+    }
+
+    visible = []
+    for t in templates:
+        tid = t.get("id")
+        settings_entry = ts_repo.get_by_template_id(tid) if tid else None
+        if not settings_entry or not settings_entry.get("restricted_to_workgroups"):
+            visible.append(t)
+            continue
+        allowed = {r["workgroup_id"] for r in wt_repo.get_template_workgroups(tid)}
+        if user_workgroup_ids & allowed:
+            visible.append(t)
+    return visible
+
+
 @router.get("/")
 def list_templates(request: Request, current_user: dict = Depends(verify_tenant_match)):
     templates_dir = get_templates_dir(request)
     submissions_dir = _get_submissions_dir_for_tenant(request)
-    return read_templates(templates_dir, submissions_dir)
+    templates = read_templates(templates_dir, submissions_dir)
+    return _filter_templates_by_workgroup(templates, current_user)
 
 
 @router.get("/{template_id}")
@@ -424,6 +461,9 @@ def delete_template(
     for f in template_dir.iterdir():
         f.unlink(missing_ok=True)
     template_dir.rmdir()
+
+    from repositories.factory import get_template_settings_repository
+    get_template_settings_repository().delete(template_id)
 
     return {"detail": "Deleted"}
 

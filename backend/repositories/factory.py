@@ -1,5 +1,13 @@
 from config import settings
-from repositories.base import RoleRepository, TenantRepository, UserRepository
+from repositories.base import (
+    RoleRepository,
+    TemplateSettingsRepository,
+    TenantRepository,
+    UserRepository,
+    WorkgroupRepository,
+    WorkgroupTemplateRepository,
+    WorkgroupUserRepository,
+)
 
 
 def get_user_repository() -> UserRepository:
@@ -27,3 +35,39 @@ def get_tenant_repository() -> TenantRepository:
     else:
         from repositories.db_repo import DbTenantRepository
         return DbTenantRepository()
+
+
+def get_workgroup_repository() -> WorkgroupRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonWorkgroupRepository
+        return JsonWorkgroupRepository()
+    else:
+        from repositories.db_repo import DbWorkgroupRepository
+        return DbWorkgroupRepository()
+
+
+def get_template_settings_repository() -> TemplateSettingsRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonTemplateSettingsRepository
+        return JsonTemplateSettingsRepository()
+    else:
+        from repositories.db_repo import DbTemplateSettingsRepository
+        return DbTemplateSettingsRepository()
+
+
+def get_workgroup_template_repository() -> WorkgroupTemplateRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonWorkgroupTemplateRepository
+        return JsonWorkgroupTemplateRepository()
+    else:
+        from repositories.db_repo import DbWorkgroupTemplateRepository
+        return DbWorkgroupTemplateRepository()
+
+
+def get_workgroup_user_repository() -> WorkgroupUserRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonWorkgroupUserRepository
+        return JsonWorkgroupUserRepository()
+    else:
+        from repositories.db_repo import DbWorkgroupUserRepository
+        return DbWorkgroupUserRepository()
