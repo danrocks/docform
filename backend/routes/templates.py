@@ -218,6 +218,33 @@ def get_template(template_id: str, request: Request, current_user: dict = Depend
     return _load_template_with_interview(template_dir, submissions_dir)
 
 
+@router.get("/{template_id}/interview")
+def get_template_interview(
+    template_id: str,
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
+):
+    """Return the raw InterviewSchema JSON for a template.
+
+    The frontend editor uses this to load and edit the full interview
+    structure (including nested repeat/dialog components, rules, version,
+    etc.) rather than just the simplified component list exposed via
+    `GET /templates/{template_id}`.
+    """
+    templates_dir = get_templates_dir(request)
+    template_dir = templates_dir / template_id
+    meta_path = template_dir / TEMPLATE_META_FILENAME
+    if not meta_path.exists():
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    meta = json.loads(meta_path.read_text())
+    interview_filename = meta.get("interviewFile") or TEMPLATE_INTERVIEW_FILENAME
+    interview_path = template_dir / interview_filename
+    if not interview_path.exists():
+        raise HTTPException(status_code=404, detail="Interview file not found")
+    return json.loads(interview_path.read_text())
+
+
 @router.post("/")
 async def create_template(
     request: Request,
