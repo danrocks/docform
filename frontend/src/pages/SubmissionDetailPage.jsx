@@ -27,6 +27,66 @@ function InfoRow({ icon: Icon, label, value }) {
   )
 }
 
+function humanizeKey(k) {
+  return String(k).replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+}
+
+function formatScalar(v) {
+  if (v === null || v === undefined || v === '') return '—'
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No'
+  return String(v)
+}
+
+// Render a single submission value. Strings/numbers/dates render inline;
+// arrays render as numbered nested blocks (repeat groups); plain objects
+// render as a stack of key/value pairs.
+function FieldValue({ value }) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="text-sm text-gray-400 italic">No entries</span>
+    }
+    return (
+      <div className="space-y-2">
+        {value.map((item, idx) => (
+          <div key={idx} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
+            <p className="text-xs text-gray-400 mb-2 font-medium">Item {idx + 1}</p>
+            {item && typeof item === 'object' && !Array.isArray(item) ? (
+              <ObjectEntries obj={item} />
+            ) : (
+              <FieldValue value={item} />
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (value && typeof value === 'object') {
+    return <ObjectEntries obj={value} />
+  }
+
+  return <span className="text-sm text-gray-900 font-medium">{formatScalar(value)}</span>
+}
+
+function ObjectEntries({ obj }) {
+  const entries = Object.entries(obj)
+  if (entries.length === 0) {
+    return <span className="text-sm text-gray-400 italic">Empty</span>
+  }
+  return (
+    <div className="space-y-2">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex gap-3">
+          <p className="text-xs text-gray-500 w-32 flex-shrink-0 capitalize mt-0.5">{humanizeKey(k)}</p>
+          <div className="flex-1 min-w-0">
+            <FieldValue value={v} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function SubmissionDetailPage() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -105,8 +165,10 @@ export default function SubmissionDetailPage() {
             <div className="space-y-3">
               {Object.entries(sub.data || {}).map(([k, v]) => (
                 <div key={k} className="flex gap-4 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                  <p className="text-sm text-gray-500 w-40 flex-shrink-0 capitalize">{k.replace(/_/g,' ')}</p>
-                  <p className="text-sm text-gray-900 font-medium flex-1">{String(v)}</p>
+                  <p className="text-sm text-gray-500 w-40 flex-shrink-0 capitalize">{humanizeKey(k)}</p>
+                  <div className="flex-1 min-w-0">
+                    <FieldValue value={v} />
+                  </div>
                 </div>
               ))}
             </div>
