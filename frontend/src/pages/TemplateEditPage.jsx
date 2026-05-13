@@ -157,17 +157,19 @@ function Checkbox({ label, checked, onChange, className = '' }) {
   )
 }
 
-function Select({ label, value, onChange, options }) {
+function Select({ label, value, onChange, options, disabled = false, hint }) {
   return (
     <div>
       <label className="label text-xs">{label}</label>
       <select
-        className="input text-sm"
+        className={`input text-sm ${disabled ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
+        disabled={disabled}
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+      {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
     </div>
   )
 }
@@ -327,6 +329,10 @@ function ComponentCard({ component, index, total, onChange, onRemove, onMove, de
   const Icon = TYPE_ICON[component.type] || Type
   const isContainer = component.type === 'repeat' || component.type === 'dialog'
   const labelKey = component.type === 'dialog' ? 'title' : 'label'
+  // Once a container has children, switching its type would silently discard
+  // those children (or coerce them into a bogus shape). Lock the type so the
+  // user has to explicitly remove the children first.
+  const typeLocked = isContainer && (component.components || []).length > 0
 
   const update = (key, value) => onChange(setProp(component, key, value))
 
@@ -398,6 +404,8 @@ function ComponentCard({ component, index, total, onChange, onRemove, onMove, de
                   value={component.type}
                   onChange={handleTypeChange}
                   options={COMPONENT_TYPES.map(t => ({ value: t.value, label: t.label }))}
+                  disabled={typeLocked}
+                  hint={typeLocked ? 'Remove all sub-fields to change the type' : undefined}
                 />
                 {!isContainer && (
                   <Checkbox label="Required question" checked={component.required}
