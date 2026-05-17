@@ -51,6 +51,17 @@ def get_template_subdir(templates_dir: Path, template_id: str) -> Path:
     return path
 
 
+def get_workgroup_subdir(base_dir: Path, workgroup_id: str) -> Path:
+    """Return the per-workgroup subdirectory under *base_dir*, creating it if needed.
+
+    Used to namespace submissions and generated artefacts by workgroup so that
+    files for different workgroups don't collide and can be enumerated cheaply.
+    """
+    path = base_dir / "workgroups" / workgroup_id
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Atomic write helpers (#2)
 # ---------------------------------------------------------------------------

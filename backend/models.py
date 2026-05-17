@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, String, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -55,3 +55,87 @@ class Role(Base):
 
     def to_dict(self) -> dict:
         return {"name": self.name, "description": self.description}
+
+
+class Workgroup(Base):
+    __tablename__ = "workgroups"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=False, default="")
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
+    requires_approval = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String, nullable=False)
+    created_by = Column(String, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "tenant_id": self.tenant_id,
+            "requires_approval": bool(self.requires_approval),
+            "created_at": self.created_at,
+            "created_by": self.created_by,
+        }
+
+
+class TemplateSettings(Base):
+    __tablename__ = "template_settings"
+
+    template_id = Column(String, primary_key=True)
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
+    restricted_to_workgroups = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String, nullable=False)
+    created_by = Column(String, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "template_id": self.template_id,
+            "tenant_id": self.tenant_id,
+            "restricted_to_workgroups": bool(self.restricted_to_workgroups),
+            "created_at": self.created_at,
+            "created_by": self.created_by,
+        }
+
+
+class WorkgroupTemplate(Base):
+    __tablename__ = "workgroup_templates"
+
+    workgroup_id = Column(
+        String,
+        ForeignKey("workgroups.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    template_id = Column(
+        String,
+        ForeignKey("template_settings.template_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "workgroup_id": self.workgroup_id,
+            "template_id": self.template_id,
+        }
+
+
+class WorkgroupUser(Base):
+    __tablename__ = "workgroup_users"
+
+    workgroup_id = Column(
+        String,
+        ForeignKey("workgroups.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id = Column(
+        String,
+        ForeignKey("users.id"),
+        primary_key=True,
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "workgroup_id": self.workgroup_id,
+            "user_id": self.user_id,
+        }
