@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import api from '../api'
 import toast from 'react-hot-toast'
-import { Plus, Upload, FileText, Pencil, Trash2, ToggleLeft, ToggleRight, ClipboardList, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Upload, FileText, Pencil, Trash2, ToggleLeft, ToggleRight, ClipboardList, Sparkles, ChevronDown, ChevronUp, Network } from 'lucide-react'
 
 function CreateModal({ onClose, onCreated, aiAvailable }) {
   const [tab, setTab] = useState('upload')
@@ -209,10 +209,33 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [aiAvailable, setAiAvailable] = useState(false)
+  const [templateWorkgroups, setTemplateWorkgroups] = useState({})
+  const [workgroups, setWorkgroups] = useState([])
+
+  const loadWorkgroupInfo = async () => {
+    try {
+      const { data } = await api.get('/workgroups')
+      const wgs = Array.isArray(data) ? data : []
+      setWorkgroups(wgs)
+      const twMap = {}
+      await Promise.all(wgs.map(async wg => {
+        try {
+          const res = await api.get(`/workgroups/${wg.id}/templates`)
+          const links = Array.isArray(res.data) ? res.data : []
+          links.forEach(link => {
+            if (!twMap[link.template_id]) twMap[link.template_id] = []
+            twMap[link.template_id].push(wg.id)
+          })
+        } catch {}
+      }))
+      setTemplateWorkgroups(twMap)
+    } catch {}
+  }
 
   const load = () => api.get('/templates/').then(r => setTemplates(r.data)).finally(() => setLoading(false))
   useEffect(() => {
     load()
+    loadWorkgroupInfo()
     api.get('/templates/ai-status').then(r => setAiAvailable(r.data.available)).catch(() => {})
   }, [])
 
@@ -281,6 +304,18 @@ export default function TemplatesPage() {
                   <span>{tpl.submission_count || 0} submissions</span>
                   <span>{tpl.original_filename}</span>
                 </div>
+                {(templateWorkgroups[tpl.id] || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {(templateWorkgroups[tpl.id] || []).map(wgId => {
+                      const wg = workgroups.find(w => w.id === wgId)
+                      return wg ? (
+                        <span key={wgId} className="badge bg-blue-50 text-blue-700 flex items-center gap-0.5 text-xs">
+                          <Network size={10} /> {wg.name}
+                        </span>
+                      ) : null
+                    })}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => toggleActive(tpl)} title={tpl.active ? 'Deactivate' : 'Activate'}
