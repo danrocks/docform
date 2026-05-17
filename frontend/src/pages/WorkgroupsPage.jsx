@@ -152,7 +152,10 @@ export default function WorkgroupsPage() {
         <div className="card p-12 text-center">
           <Users size={40} className="mx-auto mb-3 text-gray-300" />
           <p className="text-gray-500 font-medium">No workgroups yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create a workgroup to organize users and control template access</p>
+          <p className="text-sm text-gray-400 mt-1 max-w-md mx-auto">
+            Workgroups let you organize users into teams and control which templates each team can access.
+            Create a workgroup, then add members and assign templates to it.
+          </p>
           <button onClick={openCreate} className="btn-primary mt-4 mx-auto">
             <Plus size={16} /> Create workgroup
           </button>
@@ -160,35 +163,42 @@ export default function WorkgroupsPage() {
       ) : (
         <div className="space-y-3">
           {workgroups.map(wg => (
-            <div key={wg.id} className="card p-5 flex items-center gap-4">
-              <div className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Users size={18} className="text-brand-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-gray-900">{wg.name}</p>
-                  {wg.requires_approval && (
-                    <span className="badge bg-amber-100 text-amber-700 flex items-center gap-0.5">
-                      <ShieldCheck size={10} /> Approval
-                    </span>
-                  )}
-                </div>
-                {wg.description && <p className="text-sm text-gray-500 truncate mt-0.5">{wg.description}</p>}
-                <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
-                  <span className="flex items-center gap-1"><Users size={11} /> {memberCounts[wg.id] ?? '...'} members</span>
-                  <span className="flex items-center gap-1"><FileText size={11} /> {templateCounts[wg.id] ?? '...'} templates</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Link to={`/workgroups/${wg.id}`} className="btn-secondary !px-3 !py-1.5 text-xs">
-                  View <ChevronRight size={13} />
+            <div key={wg.id} className="card p-5">
+              <div className="flex items-center gap-4">
+                <Link to={`/workgroups/${wg.id}`} className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-brand-100 transition-colors">
+                  <Users size={18} className="text-brand-600" />
                 </Link>
-                <button onClick={() => openEdit(wg)} className="btn-secondary !px-3 !py-1.5 text-xs">
-                  <Pencil size={13} /> Edit
-                </button>
-                <button onClick={() => deleteWorkgroup(wg)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Link to={`/workgroups/${wg.id}`} className="font-medium text-gray-900 hover:text-brand-600 transition-colors">{wg.name}</Link>
+                    {wg.requires_approval && (
+                      <span className="badge bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                        <ShieldCheck size={10} /> Approval
+                      </span>
+                    )}
+                  </div>
+                  {wg.description && <p className="text-sm text-gray-500 truncate mt-0.5">{wg.description}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button onClick={() => openEdit(wg)} className="btn-secondary !px-3 !py-1.5 text-xs">
+                    <Pencil size={13} /> Edit
+                  </button>
+                  <button onClick={() => deleteWorkgroup(wg)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+                <Link to={`/workgroups/${wg.id}`} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-600 transition-colors px-2 py-1 rounded hover:bg-gray-50">
+                  <Users size={12} /> {memberCounts[wg.id] ?? '...'} members
+                </Link>
+                <Link to={`/workgroups/${wg.id}`} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-600 transition-colors px-2 py-1 rounded hover:bg-gray-50">
+                  <FileText size={12} /> {templateCounts[wg.id] ?? '...'} templates
+                </Link>
+                <div className="flex-1" />
+                <Link to={`/workgroups/${wg.id}`} className="btn-primary !py-1.5 text-xs">
+                  Manage members & templates <ChevronRight size={13} />
+                </Link>
               </div>
             </div>
           ))}
