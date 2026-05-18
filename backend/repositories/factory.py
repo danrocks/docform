@@ -7,6 +7,7 @@ from repositories.base import (
     WorkgroupRepository,
     WorkgroupTemplateRepository,
     WorkgroupUserRepository,
+    WorkitemRepository,
 )
 
 
@@ -71,3 +72,12 @@ def get_workgroup_user_repository() -> WorkgroupUserRepository:
     else:
         from repositories.db_repo import DbWorkgroupUserRepository
         return DbWorkgroupUserRepository()
+
+
+def get_workitem_repository() -> WorkitemRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonWorkitemRepository
+        return JsonWorkitemRepository()
+    else:
+        from repositories.db_repo import DbWorkitemRepository
+        return DbWorkitemRepository()

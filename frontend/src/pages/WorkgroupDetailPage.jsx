@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
-import { Users, FileText, Plus, Trash2, ShieldCheck, ChevronRight, X, Search } from 'lucide-react'
+import { Users, FileText, Plus, Trash2, ShieldCheck, ChevronRight, X, Search, Pencil, ClipboardList } from 'lucide-react'
 
 function AddMemberModal({ onClose, onAdded, workgroupId, existingUserIds }) {
   const [users, setUsers] = useState([])
@@ -74,6 +74,64 @@ function AddMemberModal({ onClose, onAdded, workgroupId, existingUserIds }) {
         <div className="pt-3 mt-3 border-t border-brand-100">
           <button onClick={onClose} className="btn-secondary w-full justify-center">Done</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function WorkitemModal({ onClose, onSaved, workgroupId, workitem }) {
+  const editing = !!workitem
+  const [name, setName] = useState(workitem?.name || '')
+  const [description, setDescription] = useState(workitem?.description || '')
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async e => {
+    e.preventDefault()
+    if (!name.trim()) return toast.error('Name is required')
+    setSaving(true)
+    try {
+      if (editing) {
+        const { data } = await api.put(`/workgroups/${workgroupId}/workitems/${workitem.id}`, { name, description })
+        toast.success('Workitem updated')
+        onSaved(data)
+      } else {
+        const { data } = await api.post(`/workgroups/${workgroupId}/workitems`, { name, description })
+        toast.success('Workitem created')
+        onSaved(data)
+      }
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || (editing ? 'Update failed' : 'Create failed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-brand-900">{editing ? 'Edit workitem' : 'New workitem'}</h2>
+          <button onClick={onClose} className="text-brand-400 hover:text-brand-600 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Name *</label>
+            <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Q1 Report" required />
+          </div>
+          <div>
+            <label className="label">Description</label>
+            <input className="input" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Create workitem'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
@@ -160,18 +218,22 @@ export default function WorkgroupDetailPage() {
   const [templates, setTemplates] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [allTemplates, setAllTemplates] = useState([])
+  const [workitems, setWorkitems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddMember, setShowAddMember] = useState(false)
   const [showAddTemplate, setShowAddTemplate] = useState(false)
+  const [showWorkitemModal, setShowWorkitemModal] = useState(false)
+  const [editingWorkitem, setEditingWorkitem] = useState(null)
 
   const load = async () => {
     try {
-      const [wgRes, membersRes, templatesRes, usersRes, tplRes] = await Promise.all([
+      const [wgRes, membersRes, templatesRes, usersRes, tplRes, workitemsRes] = await Promise.all([
         api.get(`/workgroups/${id}`),
         api.get(`/workgroups/${id}/users`),
         api.get(`/workgroups/${id}/templates`),
         api.get('/users'),
         api.get('/templates/'),
+        api.get(`/workgroups/${id}/workitems`).catch(() => ({ data: [] })),
       ])
       setWorkgroup(wgRes.data)
       const memberLinks = Array.isArray(membersRes.data) ? membersRes.data : []
@@ -186,6 +248,8 @@ export default function WorkgroupDetailPage() {
 
       const templateIds = templateLinks.map(t => t.template_id)
       setTemplates(tplArr.filter(t => templateIds.includes(t.id)))
+
+      setWorkitems(Array.isArray(workitemsRes.data) ? workitemsRes.data : [])
     } catch {
       toast.error('Failed to load workgroup')
     } finally {
@@ -223,6 +287,25 @@ export default function WorkgroupDetailPage() {
 
   const handleTemplateAdded = tpl => {
     setTemplates(ts => [...ts, tpl])
+  }
+
+  const handleWorkitemSaved = wi => {
+    setWorkitems(items => {
+      const idx = items.findIndex(w => w.id === wi.id)
+      if (idx >= 0) return items.map(w => w.id === wi.id ? wi : w)
+      return [...items, wi]
+    })
+  }
+
+  const removeWorkitem = async wi => {
+    if (!confirm(`Delete workitem "${wi.name}"?`)) return
+    try {
+      await api.delete(`/workgroups/${id}/workitems/${wi.id}`)
+      setWorkitems(items => items.filter(w => w.id !== wi.id))
+      toast.success('Workitem deleted')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to delete workitem')
+    }
   }
 
   if (loading) {
@@ -306,6 +389,65 @@ export default function WorkgroupDetailPage() {
         )}
       </div>
 
+      {/* Workitems Section */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-brand-900 flex items-center gap-2">
+            <ClipboardList size={18} className="text-brand-400" /> Workitems
+            <span className="text-sm font-normal text-brand-400">({workitems.length})</span>
+          </h2>
+          <button onClick={() => { setEditingWorkitem(null); setShowWorkitemModal(true) }} className="btn-primary !py-1.5 text-xs">
+            <Plus size={14} /> New workitem
+          </button>
+        </div>
+        {workitems.length === 0 ? (
+          <div className="card p-8 text-center">
+            <ClipboardList size={32} className="mx-auto mb-2 text-brand-300" />
+            <p className="text-sm text-brand-400">No workitems yet. Create a workitem to get started.</p>
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-brand-100">
+                  <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Name</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Created</th>
+                  <th className="text-right px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workitems.map(wi => (
+                  <tr key={wi.id} className="border-b border-brand-50 last:border-0">
+                    <td className="px-5 py-3">
+                      <p className="font-medium text-brand-900">{wi.name}</p>
+                      {wi.description && <p className="text-xs text-brand-400 truncate max-w-[250px]">{wi.description}</p>}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={`badge ${
+                        wi.status === 'active' ? 'bg-accent-100 text-accent-700' :
+                        wi.status === 'completed' ? 'bg-green-100 text-green-700' :
+                        wi.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                        'bg-brand-100 text-brand-500'
+                      } capitalize`}>{wi.status}</span>
+                    </td>
+                    <td className="px-5 py-3 text-brand-500">{new Date(wi.created_at).toLocaleDateString()}</td>
+                    <td className="px-5 py-3 text-right">
+                      <button onClick={() => { setEditingWorkitem(wi); setShowWorkitemModal(true) }} className="text-brand-400 hover:text-brand-600 transition-colors p-1" title="Edit">
+                        <Pencil size={16} />
+                      </button>
+                      <button onClick={() => removeWorkitem(wi)} className="text-brand-400 hover:text-red-500 transition-colors p-1" title="Delete">
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Templates Section */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -360,6 +502,15 @@ export default function WorkgroupDetailPage() {
           onAdded={handleTemplateAdded}
           workgroupId={id}
           existingTemplateIds={templates.map(t => t.id)}
+        />
+      )}
+
+      {showWorkitemModal && (
+        <WorkitemModal
+          onClose={() => { setShowWorkitemModal(false); setEditingWorkitem(null) }}
+          onSaved={handleWorkitemSaved}
+          workgroupId={id}
+          workitem={editingWorkitem}
         />
       )}
     </div>
