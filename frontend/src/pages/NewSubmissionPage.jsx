@@ -32,8 +32,8 @@ function collectExpressionFields(components) {
 function PickTemplate({ templates, onSelect }) {
   return (
     <div>
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">Choose a template</h2>
-      <p className="text-sm text-gray-500 mb-5">Select the document you want to complete</p>
+      <h2 className="text-lg font-semibold text-brand-900 mb-1">Choose a template</h2>
+      <p className="text-sm text-brand-500 mb-5">Select the document you want to complete</p>
       <div className="space-y-2">
         {templates.map(tpl => (
           <button key={tpl.id} onClick={() => onSelect(tpl)}
@@ -42,11 +42,11 @@ function PickTemplate({ templates, onSelect }) {
               <FileText size={18} className="text-brand-600"/>
             </div>
             <div className="flex-1">
-              <p className="font-medium text-gray-900">{tpl.name}</p>
-              {tpl.description && <p className="text-sm text-gray-500">{tpl.description}</p>}
-              <p className="text-xs text-gray-400 mt-0.5">{tpl.fields?.length || 0} interview questions</p>
+              <p className="font-medium text-brand-900">{tpl.name}</p>
+              {tpl.description && <p className="text-sm text-brand-500">{tpl.description}</p>}
+              <p className="text-xs text-brand-400 mt-0.5">{tpl.fields?.length || 0} interview questions</p>
             </div>
-            <ChevronRight size={16} className="text-gray-300 group-hover:text-brand-500 transition-colors"/>
+            <ChevronRight size={16} className="text-brand-300 group-hover:text-brand-500 transition-colors"/>
           </button>
         ))}
       </div>
@@ -230,7 +230,7 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
               placeholder={field.placeholder || ''}
               maxLength={field.maxLength || undefined} />
             {field.maxLength && (
-              <span className="text-xs text-gray-400 absolute bottom-2 right-3">
+              <span className="text-xs text-brand-400 absolute bottom-2 right-3">
                 {(value || '').length} / {field.maxLength}
               </span>
             )}
@@ -245,7 +245,7 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
             placeholder={field.placeholder || ''}
             maxLength={field.maxLength || undefined} />
           {field.maxLength && (
-            <span className="text-xs text-gray-400 absolute top-1/2 -translate-y-1/2 right-3">
+            <span className="text-xs text-brand-400 absolute top-1/2 -translate-y-1/2 right-3">
               {(value || '').length} / {field.maxLength}
             </span>
           )}
@@ -264,18 +264,18 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
       }
       return (
         <div className="flex items-center gap-2">
-          {field.prefix && <span className="text-sm text-gray-500 font-medium">{field.prefix}</span>}
-          {field.unit && !field.prefix && <span className="text-sm text-gray-500 font-medium">{field.unit}</span>}
+          {field.prefix && <span className="text-sm text-brand-500 font-medium">{field.prefix}</span>}
+          {field.unit && !field.prefix && <span className="text-sm text-brand-500 font-medium">{field.unit}</span>}
           <input type={isComputed ? 'text' : 'number'} id={field.id} value={displayValue}
             onChange={e => onChange(field.id, e.target.value)}
             readOnly={isComputed}
             tabIndex={isComputed ? -1 : undefined}
-            className={`input flex-1 ${err} ${isComputed ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''}`}
+            className={`input flex-1 ${err} ${isComputed ? 'bg-brand-50 text-brand-600 cursor-not-allowed' : ''}`}
             placeholder={field.placeholder || ''}
             min={isComputed ? undefined : (field.min ?? undefined)}
             max={isComputed ? undefined : (field.max ?? undefined)}
             step={isComputed ? undefined : step} />
-          {field.suffix && <span className="text-sm text-gray-500 font-medium">{field.suffix}</span>}
+          {field.suffix && <span className="text-sm text-brand-500 font-medium">{field.suffix}</span>}
         </div>
       )
     }
@@ -303,7 +303,7 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
                   checked={value === opt.value}
                   onChange={() => onChange(field.id, opt.value)}
                   className="text-brand-600" />
-                <span className="text-sm text-gray-700">{opt.label}</span>
+                <span className="text-sm text-brand-700">{opt.label}</span>
               </label>
             ))}
           </div>
@@ -324,8 +324,8 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
                       : selected.filter(s => s !== opt.value)
                     onChange(field.id, next)
                   }}
-                  className="rounded border-gray-300 text-brand-600" />
-                <span className="text-sm text-gray-700">{opt.label}</span>
+                  className="rounded border-brand-300 text-brand-600" />
+                <span className="text-sm text-brand-700">{opt.label}</span>
               </label>
             ))}
           </div>
@@ -365,11 +365,11 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
   const renderComponent = (field, scope, onScopeChange, errKeyPrefix = '') => {
     if (field.type === 'dialog') {
       return (
-        <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-4">
+        <div key={field.id} className="border border-brand-200 rounded-lg p-4 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">{field.title}</h3>
+            <h3 className="text-sm font-semibold text-brand-900">{field.title}</h3>
             {field.helpText && (
-              <p className="text-xs text-gray-500 mt-0.5">{field.helpText}</p>
+              <p className="text-xs text-brand-500 mt-0.5">{field.helpText}</p>
             )}
           </div>
           {(field.components || []).map(nested =>
@@ -397,13 +397,13 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
             {field.required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
           {field.helpText && (
-            <p className="text-xs text-gray-500 mt-0.5 mb-1">{field.helpText}</p>
+            <p className="text-xs text-brand-500 mt-0.5 mb-1">{field.helpText}</p>
           )}
           <div className="space-y-3">
             {items.map((item, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-3 space-y-3 relative">
+              <div key={idx} className="border border-brand-200 rounded-lg p-3 space-y-3 relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">#{idx + 1}</span>
+                  <span className="text-xs font-medium text-brand-500">#{idx + 1}</span>
                   <button type="button" onClick={() => removeItem(idx)}
                     className="text-xs text-red-500 hover:text-red-700">
                     Remove
@@ -437,7 +437,7 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
           {field.required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
         {field.helpText && (
-          <p className="text-xs text-gray-500 mt-0.5 mb-1">{field.helpText}</p>
+          <p className="text-xs text-brand-500 mt-0.5 mb-1">{field.helpText}</p>
         )}
         {renderField(field, scope[field.id], onScopeChange, errKeyPrefix)}
         {errors[errKey] && <p data-field-error className="text-xs text-red-500 mt-1">{errors[errKey]}</p>}
@@ -447,16 +447,16 @@ function FillForm({ template, data, context, onDataChange, onContextChange, onBa
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors">
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-brand-500 hover:text-brand-700 mb-4 transition-colors">
         <ChevronLeft size={15}/> Back
       </button>
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">{template.name}</h2>
-      <p className="text-sm text-gray-500 mb-5">Complete the interview below</p>
+      <h2 className="text-lg font-semibold text-brand-900 mb-1">{template.name}</h2>
+      <p className="text-sm text-brand-500 mb-5">Complete the interview below</p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {template.fields.map(field => renderComponent(field, data, onDataChange))}
 
-        <div className="pt-2 border-t border-gray-100">
+        <div className="pt-2 border-t border-brand-100">
           <label className="label">Interview context / notes</label>
           <textarea className="input resize-none" rows={2} value={context}
             onChange={e => onContextChange(e.target.value)}
@@ -479,11 +479,11 @@ function Success({ submission, onNew }) {
   const navigate = useNavigate()
   return (
     <div className="text-center py-6">
-      <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <CheckCircle size={28} className="text-green-600"/>
+      <div className="w-14 h-14 bg-accent-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <CheckCircle size={28} className="text-accent-600"/>
       </div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-1">Interview complete</h2>
-      <p className="text-sm text-gray-500 mb-6">
+      <h2 className="text-xl font-semibold text-brand-900 mb-1">Interview complete</h2>
+      <p className="text-sm text-brand-500 mb-6">
         Your documents are ready. You can download them from the submission page.
       </p>
       <div className="flex gap-3 justify-center">
@@ -541,7 +541,7 @@ export default function NewSubmissionPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">New submission</h1>
+      <h1 className="text-2xl font-bold text-brand-900 mb-6">New submission</h1>
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-8">
@@ -551,15 +551,15 @@ export default function NewSubmissionPage() {
           const active = step === n
           return (
             <div key={n} className="flex items-center gap-2">
-              <div className={`flex items-center gap-2 text-sm font-medium ${active ? 'text-brand-700' : done ? 'text-green-600' : 'text-gray-400'}`}>
+              <div className={`flex items-center gap-2 text-sm font-medium ${active ? 'text-brand-700' : done ? 'text-accent-600' : 'text-brand-400'}`}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  active ? 'bg-brand-600 text-white' : done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+                  active ? 'bg-accent-600 text-white' : done ? 'bg-accent-500 text-white' : 'bg-brand-200 text-brand-500'
                 }`}>
                   {done ? '\u2713' : n}
                 </div>
                 {label}
               </div>
-              {i < steps.length - 1 && <div className="w-8 h-px bg-gray-200 mx-1"/>}
+              {i < steps.length - 1 && <div className="w-8 h-px bg-brand-200 mx-1"/>}
             </div>
           )
         })}
@@ -568,7 +568,7 @@ export default function NewSubmissionPage() {
       <div className="card p-6 max-w-2xl">
         {step === 1 && (
           templates.length === 0
-            ? <div className="text-center py-8 text-gray-400 text-sm">No active templates available. Ask an admin to create one.</div>
+            ? <div className="text-center py-8 text-brand-400 text-sm">No active templates available. Ask an admin to create one.</div>
             : <PickTemplate templates={templates} onSelect={t => { setSelected(t); setFormData({}); setStep(2) }} />
         )}
         {step === 2 && selected && (

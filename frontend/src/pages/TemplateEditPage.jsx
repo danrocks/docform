@@ -150,9 +150,9 @@ function Checkbox({ label, checked, onChange, className = '' }) {
         type="checkbox"
         checked={!!checked}
         onChange={e => onChange(e.target.checked)}
-        className="rounded border-gray-300 text-brand-600"
+        className="rounded border-brand-300 text-brand-600"
       />
-      <span className="text-sm text-gray-600">{label}</span>
+      <span className="text-sm text-brand-600">{label}</span>
     </label>
   )
 }
@@ -162,14 +162,14 @@ function Select({ label, value, onChange, options, disabled = false, hint }) {
     <div>
       <label className="label text-xs">{label}</label>
       <select
-        className={`input text-sm ${disabled ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+        className={`input text-sm ${disabled ? 'bg-brand-50 text-brand-500 cursor-not-allowed' : ''}`}
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+      {hint && <p className="text-xs text-brand-400 mt-0.5">{hint}</p>}
     </div>
   )
 }
@@ -220,7 +220,7 @@ function TypeSettings({ component, update }) {
           onChange={e => update('expression', e.target.value)}
           placeholder="e.g. subtotal + vat"
         />
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-brand-400 mt-1">
           When set, this field is computed from other fields and is not editable in the form.
         </p>
       </div>
@@ -268,7 +268,7 @@ function TypeSettings({ component, update }) {
                 <input className="input text-sm flex-1" placeholder="Label shown to user"
                   value={opt.label || ''} onChange={e => setOption(i, 'label', e.target.value)} />
                 <button type="button" onClick={() => removeOption(i)}
-                  className="text-gray-300 hover:text-red-500 px-1" title="Remove option">
+                  className="text-brand-300 hover:text-red-500 px-1" title="Remove option">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -364,14 +364,14 @@ function ComponentCard({ component, index, total, onChange, onRemove, onMove, de
   return (
     <div className="card p-4">
       <div className="flex gap-3 items-start group">
-        <div className="flex flex-col items-center gap-0.5 mt-1 text-gray-300">
+        <div className="flex flex-col items-center gap-0.5 mt-1 text-brand-300">
           <button type="button" onClick={() => onMove(index, -1)} disabled={index === 0}
-            className="hover:text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed">
+            className="hover:text-brand-500 disabled:opacity-30 disabled:cursor-not-allowed">
             <ChevronUp size={14} />
           </button>
           <GripVertical size={14} className="cursor-grab" />
           <button type="button" onClick={() => onMove(index, 1)} disabled={index === total - 1}
-            className="hover:text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed">
+            className="hover:text-brand-500 disabled:opacity-30 disabled:cursor-not-allowed">
             <ChevronDown size={14} />
           </button>
         </div>
@@ -379,17 +379,17 @@ function ComponentCard({ component, index, total, onChange, onRemove, onMove, de
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <button type="button" onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700">
+              className="flex items-center gap-1.5 text-brand-500 hover:text-brand-700">
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               <Icon size={14} className="text-brand-500" />
-              <span className="text-sm font-medium text-gray-700">
-                {component[labelKey] || <span className="italic text-gray-400">Untitled</span>}
+              <span className="text-sm font-medium text-brand-700">
+                {component[labelKey] || <span className="italic text-brand-400">Untitled</span>}
               </span>
               {component.id && (
-                <span className="font-mono text-xs text-gray-400">#{component.id}</span>
+                <span className="font-mono text-xs text-brand-400">#{component.id}</span>
               )}
             </button>
-            <span className="text-xs text-gray-400 ml-auto">{TYPE_LABEL[component.type] || component.type}</span>
+            <span className="text-xs text-brand-400 ml-auto">{TYPE_LABEL[component.type] || component.type}</span>
           </div>
 
           {expanded && (
@@ -420,13 +420,13 @@ function ComponentCard({ component, index, total, onChange, onRemove, onMove, de
               </div>
 
               {component.type !== 'dialog' && (
-                <div className="border-t border-gray-100 pt-2">
+                <div className="border-t border-brand-100 pt-2">
                   <button type="button" onClick={() => setShowSettings(!showSettings)}
-                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+                    className="flex items-center gap-1.5 text-xs text-brand-500 hover:text-brand-700 transition-colors">
                     {showSettings ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                     <span className="font-medium">Type settings</span>
                     {!showSettings && (
-                      <span className="text-gray-400 ml-1">{configSummary(component)}</span>
+                      <span className="text-brand-400 ml-1">{configSummary(component)}</span>
                     )}
                   </button>
                   {showSettings && (
@@ -439,7 +439,7 @@ function ComponentCard({ component, index, total, onChange, onRemove, onMove, de
         </div>
 
         <button type="button" onClick={() => onRemove(index)}
-          className="mt-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+          className="mt-1 text-brand-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
           title="Remove component">
           <Trash2 size={16} />
         </button>
@@ -447,11 +447,11 @@ function ComponentCard({ component, index, total, onChange, onRemove, onMove, de
 
       {isContainer && expanded && (
         <div className="mt-3 pl-6 border-l-2 border-brand-100">
-          <p className="text-xs uppercase tracking-wide text-gray-400 font-medium mb-2">
+          <p className="text-xs uppercase tracking-wide text-brand-400 font-medium mb-2">
             {component.type === 'repeat' ? 'Per-item fields' : 'Dialog fields'}
           </p>
           {(component.components || []).length === 0 ? (
-            <p className="text-xs text-gray-400 italic mb-2">No sub-fields yet</p>
+            <p className="text-xs text-brand-400 italic mb-2">No sub-fields yet</p>
           ) : (
             <div className="space-y-2 mb-2">
               {(component.components || []).map((child, i) => (
@@ -484,54 +484,54 @@ function MetadataPanel({ template }) {
   const updated = template.updatedAt || template.updated_at
   return (
     <div className="card p-4">
-      <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Template details</h2>
+      <h2 className="font-semibold text-sm uppercase tracking-wide text-brand-500 mb-3">Template details</h2>
       <div className="space-y-2.5 text-sm">
         <div className="flex items-start gap-3">
-          <FileText size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+          <FileText size={14} className="text-brand-400 mt-0.5 flex-shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-400">Name</p>
-            <p className="text-gray-900">{template.name}</p>
+            <p className="text-xs text-brand-400">Name</p>
+            <p className="text-brand-900">{template.name}</p>
             {template.description && (
-              <p className="text-gray-500 mt-0.5">{template.description}</p>
+              <p className="text-brand-500 mt-0.5">{template.description}</p>
             )}
           </div>
         </div>
         {template.originalFilename && (
           <div className="flex items-start gap-3">
-            <FileText size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+            <FileText size={14} className="text-brand-400 mt-0.5 flex-shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-400">Source document</p>
-              <p className="text-gray-900 font-mono text-xs truncate">{template.originalFilename}</p>
+              <p className="text-xs text-brand-400">Source document</p>
+              <p className="text-brand-900 font-mono text-xs truncate">{template.originalFilename}</p>
             </div>
           </div>
         )}
         {created && (
           <div className="flex items-start gap-3">
-            <Calendar size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+            <Calendar size={14} className="text-brand-400 mt-0.5 flex-shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-400">Created</p>
-              <p className="text-gray-900">{safeDate(created)}</p>
+              <p className="text-xs text-brand-400">Created</p>
+              <p className="text-brand-900">{safeDate(created)}</p>
               {template.createdBy && (
-                <p className="text-xs text-gray-500 mt-0.5">by {template.createdBy}</p>
+                <p className="text-xs text-brand-500 mt-0.5">by {template.createdBy}</p>
               )}
             </div>
           </div>
         )}
         {updated && (
           <div className="flex items-start gap-3">
-            <Clock size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+            <Clock size={14} className="text-brand-400 mt-0.5 flex-shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-400">Last updated</p>
-              <p className="text-gray-900">{safeDate(updated)}</p>
+              <p className="text-xs text-brand-400">Last updated</p>
+              <p className="text-brand-900">{safeDate(updated)}</p>
             </div>
           </div>
         )}
         {template.generationMethod && (
           <div className="flex items-start gap-3">
-            <Sparkles size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+            <Sparkles size={14} className="text-brand-400 mt-0.5 flex-shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-400">Generation method</p>
-              <p className="text-gray-900 capitalize">{template.generationMethod}</p>
+              <p className="text-xs text-brand-400">Generation method</p>
+              <p className="text-brand-900 capitalize">{template.generationMethod}</p>
             </div>
           </div>
         )}
@@ -665,7 +665,7 @@ export default function TemplateEditPage() {
   }
 
   if (!template || !interview) {
-    return <div className="text-center text-gray-400 py-16 text-sm">Loading…</div>
+    return <div className="text-center text-brand-400 py-16 text-sm">Loading…</div>
   }
 
   const isAi = template.generationMethod === 'ai' || template.generation_method === 'ai'
@@ -675,13 +675,13 @@ export default function TemplateEditPage() {
     <div>
       <div className="flex items-center gap-3 mb-1">
         <button onClick={() => navigate('/templates')}
-          className="text-gray-400 hover:text-gray-600 transition-colors">
+          className="text-brand-400 hover:text-brand-600 transition-colors">
           <ChevronLeft size={20} />
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">Edit interview</h1>
-        <span className="text-xs text-gray-400 ml-2">v{interview.version}</span>
+        <h1 className="text-2xl font-bold text-brand-900">Edit interview</h1>
+        <span className="text-xs text-brand-400 ml-2">v{interview.version}</span>
       </div>
-      <p className="text-sm text-gray-500 mb-6 ml-8">
+      <p className="text-sm text-brand-500 mb-6 ml-8">
         {template.name}
         {template.originalFilename && <> &middot; {template.originalFilename}</>}
       </p>
@@ -689,7 +689,7 @@ export default function TemplateEditPage() {
       <div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 space-y-3">
           {isAi && originalPrompt && (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 text-sm text-purple-800">
+            <div className="bg-accent-50 border border-accent-200 rounded-lg px-4 py-3 text-sm text-accent-800">
               <button onClick={() => setShowPrompt(!showPrompt)}
                 className="flex items-center gap-2 font-medium w-full text-left">
                 <Sparkles size={14} />
@@ -697,12 +697,12 @@ export default function TemplateEditPage() {
                 {showPrompt ? <ChevronUp size={14} className="ml-auto" /> : <ChevronDown size={14} className="ml-auto" />}
               </button>
               {showPrompt && (
-                <div className="mt-2 bg-white rounded p-3 text-gray-700 text-sm whitespace-pre-wrap border border-purple-100">
+                <div className="mt-2 bg-white rounded p-3 text-brand-700 text-sm whitespace-pre-wrap border border-accent-100">
                   {originalPrompt}
                 </div>
               )}
               <button onClick={() => setShowRegenModal(true)}
-                className="mt-2 text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1">
+                className="mt-2 text-xs text-accent-600 hover:text-accent-800 flex items-center gap-1">
                 <RefreshCw size={12} /> Regenerate with AI
               </button>
             </div>
@@ -714,7 +714,7 @@ export default function TemplateEditPage() {
           </div>
 
           {components.length === 0 ? (
-            <div className="card p-8 text-center text-gray-400 text-sm">
+            <div className="card p-8 text-center text-brand-400 text-sm">
               No components yet. Add a component below to get started.
             </div>
           ) : (
@@ -757,26 +757,26 @@ export default function TemplateEditPage() {
         <div className="space-y-4">
           <MetadataPanel template={template} />
           <div className="card p-4">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Interview file</h2>
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-brand-500 mb-3">Interview file</h2>
             <div className="space-y-2 text-sm">
               <div>
-                <p className="text-xs text-gray-400">File</p>
-                <p className="text-gray-900 font-mono text-xs truncate">
+                <p className="text-xs text-brand-400">File</p>
+                <p className="text-brand-900 font-mono text-xs truncate">
                   {template.interviewFile || template.interview_file || 'interview.json'}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">Schema version</p>
-                <p className="text-gray-900">{interview.schemaVersion}</p>
+                <p className="text-xs text-brand-400">Schema version</p>
+                <p className="text-brand-900">{interview.schemaVersion}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">Components</p>
-                <p className="text-gray-900">{components.length}</p>
+                <p className="text-xs text-brand-400">Components</p>
+                <p className="text-brand-900">{components.length}</p>
               </div>
               {Array.isArray(interview.rules) && interview.rules.length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-400">Rules</p>
-                  <p className="text-gray-900">{interview.rules.length}</p>
+                  <p className="text-xs text-brand-400">Rules</p>
+                  <p className="text-brand-900">{interview.rules.length}</p>
                 </div>
               )}
             </div>
@@ -787,8 +787,8 @@ export default function TemplateEditPage() {
       {showRegenModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="card w-full max-w-lg p-6">
-            <h3 className="font-semibold text-gray-900 mb-1">Regenerate with AI</h3>
-            <p className="text-sm text-gray-500 mb-4">
+            <h3 className="font-semibold text-brand-900 mb-1">Regenerate with AI</h3>
+            <p className="text-sm text-brand-500 mb-4">
               This will overwrite the current document and all interview questions.
             </p>
             <textarea className="input resize-none mb-4" rows={6}

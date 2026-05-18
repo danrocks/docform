@@ -17,11 +17,11 @@ const STATUS_CLASSES = {
 function InfoRow({ icon: Icon, label, value }) {
   if (!value) return null
   return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
-      <Icon size={15} className="text-gray-400 mt-0.5 flex-shrink-0"/>
+    <div className="flex items-start gap-3 py-2.5 border-b border-brand-50 last:border-0">
+      <Icon size={15} className="text-brand-400 mt-0.5 flex-shrink-0"/>
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-        <p className="text-sm text-gray-900">{value}</p>
+        <p className="text-xs text-brand-400 mb-0.5">{label}</p>
+        <p className="text-sm text-brand-900">{value}</p>
       </div>
     </div>
   )
@@ -43,13 +43,13 @@ function formatScalar(v) {
 function FieldValue({ value }) {
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      return <span className="text-sm text-gray-400 italic">No entries</span>
+      return <span className="text-sm text-brand-400 italic">No entries</span>
     }
     return (
       <div className="space-y-2">
         {value.map((item, idx) => (
-          <div key={idx} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
-            <p className="text-xs text-gray-400 mb-2 font-medium">Item {idx + 1}</p>
+          <div key={idx} className="border border-brand-100 rounded-lg p-3 bg-brand-50/50">
+            <p className="text-xs text-brand-400 mb-2 font-medium">Item {idx + 1}</p>
             {item && typeof item === 'object' && !Array.isArray(item) ? (
               <ObjectEntries obj={item} />
             ) : (
@@ -65,19 +65,19 @@ function FieldValue({ value }) {
     return <ObjectEntries obj={value} />
   }
 
-  return <span className="text-sm text-gray-900 font-medium">{formatScalar(value)}</span>
+  return <span className="text-sm text-brand-900 font-medium">{formatScalar(value)}</span>
 }
 
 function ObjectEntries({ obj }) {
   const entries = Object.entries(obj)
   if (entries.length === 0) {
-    return <span className="text-sm text-gray-400 italic">Empty</span>
+    return <span className="text-sm text-brand-400 italic">Empty</span>
   }
   return (
     <div className="space-y-2">
       {entries.map(([k, v]) => (
         <div key={k} className="flex gap-3">
-          <p className="text-xs text-gray-500 w-32 flex-shrink-0 capitalize mt-0.5">{humanizeKey(k)}</p>
+          <p className="text-xs text-brand-500 w-32 flex-shrink-0 capitalize mt-0.5">{humanizeKey(k)}</p>
           <div className="flex-1 min-w-0">
             <FieldValue value={v} />
           </div>
@@ -92,7 +92,7 @@ function ObjectEntries({ obj }) {
 // This lets us honour labels, choice option labels, number prefix/suffix, etc.
 function LeafValue({ component, value }) {
   if (value === null || value === undefined || value === '') {
-    return <span className="text-sm text-gray-400 italic">—</span>
+    return <span className="text-sm text-brand-400 italic">—</span>
   }
 
   if (component.type === 'choice') {
@@ -103,11 +103,11 @@ function LeafValue({ component, value }) {
     }
     if (Array.isArray(value)) {
       if (value.length === 0) {
-        return <span className="text-sm text-gray-400 italic">—</span>
+        return <span className="text-sm text-brand-400 italic">—</span>
       }
-      return <span className="text-sm text-gray-900 font-medium">{value.map(lookup).join(', ')}</span>
+      return <span className="text-sm text-brand-900 font-medium">{value.map(lookup).join(', ')}</span>
     }
-    return <span className="text-sm text-gray-900 font-medium">{lookup(value)}</span>
+    return <span className="text-sm text-brand-900 font-medium">{lookup(value)}</span>
   }
 
   if (component.type === 'number') {
@@ -126,11 +126,11 @@ function LeafValue({ component, value }) {
         : component.unit && !component.prefix
           ? ` ${component.unit}`
           : ''
-      return <span className="text-sm text-gray-900 font-medium">{prefix}{display}{suffix}</span>
+      return <span className="text-sm text-brand-900 font-medium">{prefix}{display}{suffix}</span>
     }
   }
 
-  return <span className="text-sm text-gray-900 font-medium">{formatScalar(value)}</span>
+  return <span className="text-sm text-brand-900 font-medium">{formatScalar(value)}</span>
 }
 
 // Walk a list of InterviewSchema components and render their values against
@@ -148,11 +148,11 @@ function SchemaSection({ components, data, depth = 0 }) {
           return (
             <div key={c.id} className="space-y-2">
               {c.title && (
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <h3 className="text-xs font-semibold text-brand-500 uppercase tracking-wide">
                   {c.title}
                 </h3>
               )}
-              <div className={depth === 0 ? 'pl-0' : 'pl-3 border-l border-gray-100'}>
+              <div className={depth === 0 ? 'pl-0' : 'pl-3 border-l border-brand-100'}>
                 <SchemaSection components={c.components || []} data={data} depth={depth + 1} />
               </div>
             </div>
@@ -164,11 +164,11 @@ function SchemaSection({ components, data, depth = 0 }) {
         if (c.type === 'repeat') {
           const rows = Array.isArray(data?.[c.id]) ? data[c.id] : []
           return (
-            <div key={c.id} className="flex gap-4 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-              <p className="text-sm text-gray-500 w-40 flex-shrink-0">{label}</p>
+            <div key={c.id} className="flex gap-4 border-b border-brand-50 pb-3 last:border-0 last:pb-0">
+              <p className="text-sm text-brand-500 w-40 flex-shrink-0">{label}</p>
               <div className="flex-1 min-w-0">
                 {rows.length === 0 ? (
-                  <span className="text-sm text-gray-400 italic">No entries</span>
+                  <span className="text-sm text-brand-400 italic">No entries</span>
                 ) : (
                   <div className="space-y-2">
                     {rows.map((row, idx) => {
@@ -176,19 +176,19 @@ function SchemaSection({ components, data, depth = 0 }) {
                       const knownInRow = collectTopLevelKeys(c.components || [])
                       const extras = Object.entries(rowData).filter(([k]) => !knownInRow.has(k))
                       return (
-                        <div key={idx} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
-                          <p className="text-xs text-gray-400 mb-2 font-medium">Item {idx + 1}</p>
+                        <div key={idx} className="border border-brand-100 rounded-lg p-3 bg-brand-50/50">
+                          <p className="text-xs text-brand-400 mb-2 font-medium">Item {idx + 1}</p>
                           <SchemaSection
                             components={c.components || []}
                             data={rowData}
                             depth={depth + 1}
                           />
                           {extras.length > 0 && (
-                            <div className="space-y-2 pt-2 mt-2 border-t border-gray-200">
-                              <p className="text-xs text-gray-400 italic">Other data not in current template</p>
+                            <div className="space-y-2 pt-2 mt-2 border-t border-brand-200">
+                              <p className="text-xs text-brand-400 italic">Other data not in current template</p>
                               {extras.map(([k, v]) => (
                                 <div key={k} className="flex gap-4">
-                                  <p className="text-sm text-gray-500 w-40 flex-shrink-0 capitalize">{humanizeKey(k)}</p>
+                                  <p className="text-sm text-brand-500 w-40 flex-shrink-0 capitalize">{humanizeKey(k)}</p>
                                   <div className="flex-1 min-w-0">
                                     <FieldValue value={v} />
                                   </div>
@@ -208,8 +208,8 @@ function SchemaSection({ components, data, depth = 0 }) {
 
         const value = data?.[c.id]
         return (
-          <div key={c.id} className="flex gap-4 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-            <p className="text-sm text-gray-500 w-40 flex-shrink-0">{label}</p>
+          <div key={c.id} className="flex gap-4 border-b border-brand-50 pb-3 last:border-0 last:pb-0">
+            <p className="text-sm text-brand-500 w-40 flex-shrink-0">{label}</p>
             <div className="flex-1 min-w-0">
               <LeafValue component={c} value={value} />
             </div>
@@ -295,8 +295,8 @@ export default function SubmissionDetailPage() {
     finally { setActionLoading(false) }
   }
 
-  if (loading) return <div className="text-center text-gray-400 py-16 text-sm">Loading…</div>
-  if (!sub) return <div className="text-center text-gray-400 py-16 text-sm">Not found</div>
+  if (loading) return <div className="text-center text-brand-400 py-16 text-sm">Loading…</div>
+  if (!sub) return <div className="text-center text-brand-400 py-16 text-sm">Not found</div>
 
   const canApprove = ['admin','approver'].includes(user.role) && ['generated','pending'].includes(sub.status)
   const submittedDate = sub.submitted_at ? format(new Date(sub.submitted_at), 'PPpp') : '—'
@@ -306,15 +306,15 @@ export default function SubmissionDetailPage() {
     <div>
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/submissions')}
-          className="text-gray-400 hover:text-gray-600 transition-colors">
+          className="text-brand-400 hover:text-brand-600 transition-colors">
           <ChevronLeft size={20}/>
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{sub.template_name}</h1>
+            <h1 className="text-2xl font-bold text-brand-900">{sub.template_name}</h1>
             <span className={STATUS_CLASSES[sub.status] || 'badge'}>{sub.status}</span>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5 font-mono">#{id.slice(0,8)}</p>
+          <p className="text-sm text-brand-500 mt-0.5 font-mono">#{id.slice(0,8)}</p>
         </div>
       </div>
 
@@ -322,7 +322,7 @@ export default function SubmissionDetailPage() {
         {/* Left: field data */}
         <div className="col-span-2 space-y-5">
           <div className="card p-5">
-            <h2 className="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wide text-gray-500">Interview data</h2>
+            <h2 className="font-semibold text-brand-900 mb-4 text-sm uppercase tracking-wide text-brand-500">Interview data</h2>
             {(() => {
               const data = sub.data || {}
               const components = interview?.components
@@ -333,13 +333,13 @@ export default function SubmissionDetailPage() {
                   <div className="space-y-3">
                     <SchemaSection components={components} data={data} />
                     {extras.length > 0 && (
-                      <div className="space-y-2 pt-3 border-t border-gray-100">
-                        <p className="text-xs text-gray-400 italic">
+                      <div className="space-y-2 pt-3 border-t border-brand-100">
+                        <p className="text-xs text-brand-400 italic">
                           Other data not in current template
                         </p>
                         {extras.map(([k, v]) => (
                           <div key={k} className="flex gap-4">
-                            <p className="text-sm text-gray-500 w-40 flex-shrink-0 capitalize">{humanizeKey(k)}</p>
+                            <p className="text-sm text-brand-500 w-40 flex-shrink-0 capitalize">{humanizeKey(k)}</p>
                             <div className="flex-1 min-w-0">
                               <FieldValue value={v} />
                             </div>
@@ -353,8 +353,8 @@ export default function SubmissionDetailPage() {
               return (
                 <div className="space-y-3">
                   {Object.entries(data).map(([k, v]) => (
-                    <div key={k} className="flex gap-4 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                      <p className="text-sm text-gray-500 w-40 flex-shrink-0 capitalize">{humanizeKey(k)}</p>
+                    <div key={k} className="flex gap-4 border-b border-brand-50 pb-3 last:border-0 last:pb-0">
+                      <p className="text-sm text-brand-500 w-40 flex-shrink-0 capitalize">{humanizeKey(k)}</p>
                       <div className="flex-1 min-w-0">
                         <FieldValue value={v} />
                       </div>
@@ -367,13 +367,13 @@ export default function SubmissionDetailPage() {
 
           {sub.context && (
             <div className="card p-5">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Interview context / notes</h2>
-              <p className="text-sm text-gray-700">{sub.context}</p>
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-brand-500 mb-3">Interview context / notes</h2>
+              <p className="text-sm text-brand-700">{sub.context}</p>
             </div>
           )}
 
           {sub.status === 'rejected' && sub.rejection_reason && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
+            <div className="bg-red-50 border border-red-200 rounded-sm p-4 flex gap-3">
               <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5"/>
               <div>
                 <p className="text-sm font-medium text-red-700">Rejected</p>
@@ -386,7 +386,7 @@ export default function SubmissionDetailPage() {
         {/* Right: meta + actions */}
         <div className="space-y-4">
           <div className="card p-4">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Details</h2>
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-brand-500 mb-3">Details</h2>
             <InfoRow icon={User}     label="Submitted by" value={sub.submitted_by_name} />
             <InfoRow icon={Calendar} label="Submitted"    value={submittedDate} />
             {sub.approved_by_name && (
@@ -396,7 +396,7 @@ export default function SubmissionDetailPage() {
 
           {/* Downloads */}
           <div className="card p-4">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Documents</h2>
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-brand-500 mb-3">Documents</h2>
             <div className="space-y-2">
               <button onClick={() => download('docx')} disabled={!sub.docx_path}
                 className="btn-secondary w-full justify-center text-sm disabled:opacity-40">
@@ -408,7 +408,7 @@ export default function SubmissionDetailPage() {
                 <Download size={14}/> Download PDF
               </button>
               {!sub.pdf_path && sub.docx_path && (
-                <p className="text-xs text-gray-400 text-center">PDF requires LibreOffice on the server</p>
+                <p className="text-xs text-brand-400 text-center">PDF requires LibreOffice on the server</p>
               )}
             </div>
           </div>
@@ -416,10 +416,10 @@ export default function SubmissionDetailPage() {
           {/* Approver actions */}
           {canApprove && (
             <div className="card p-4">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-500 mb-3">Review</h2>
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-brand-500 mb-3">Review</h2>
               <div className="space-y-2">
                 <button onClick={approve} disabled={actionLoading}
-                  className="btn-primary w-full justify-center text-sm bg-green-600 hover:bg-green-700">
+                  className="btn-primary w-full justify-center text-sm bg-accent-600 hover:bg-accent-700">
                   <CheckCircle size={14}/> Approve
                 </button>
                 <button onClick={() => setShowRejectModal(true)} disabled={actionLoading}
@@ -436,8 +436,8 @@ export default function SubmissionDetailPage() {
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="card w-full max-w-sm p-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Reject submission</h3>
-            <p className="text-sm text-gray-500 mb-3">Please provide a reason for rejecting this submission.</p>
+            <h3 className="font-semibold text-brand-900 mb-3">Reject submission</h3>
+            <p className="text-sm text-brand-500 mb-3">Please provide a reason for rejecting this submission.</p>
             <textarea className="input resize-none mb-4" rows={3}
               value={rejectReason} onChange={e => setRejectReason(e.target.value)}
               placeholder="e.g. Missing client signature on page 2" autoFocus />

@@ -34,7 +34,7 @@ function RoleModal({ onClose, onSaved, role }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <h2 className="text-lg font-semibold text-brand-900 mb-4">
           {editing ? 'Edit role' : 'New role'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -95,8 +95,8 @@ export default function RolesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Roles</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage roles and permissions</p>
+          <h1 className="text-2xl font-bold text-brand-900">Roles</h1>
+          <p className="text-sm text-brand-500 mt-0.5">Manage roles and permissions</p>
         </div>
         <button onClick={openCreate} className="btn-primary">
           <Plus size={16} /> New role
@@ -104,12 +104,12 @@ export default function RolesPage() {
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400 py-16 text-sm">Loading...</div>
+        <div className="text-center text-brand-400 py-16 text-sm">Loading...</div>
       ) : roles.length === 0 ? (
         <div className="card p-12 text-center">
-          <Shield size={40} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-500 font-medium">No roles yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create a role to get started</p>
+          <Shield size={40} className="mx-auto mb-3 text-brand-300" />
+          <p className="text-brand-500 font-medium">No roles yet</p>
+          <p className="text-sm text-brand-400 mt-1">Create a role to get started</p>
           <button onClick={openCreate} className="btn-primary mt-4 mx-auto">
             <Plus size={16} /> Create role
           </button>
@@ -118,23 +118,23 @@ export default function RolesPage() {
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <tr className="border-b border-brand-100">
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Name</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Description</th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {roles.map(r => (
-                <tr key={r.name} className="border-b border-gray-50 last:border-0">
-                  <td className="px-5 py-3 font-medium text-gray-900 capitalize">{r.name}</td>
-                  <td className="px-5 py-3 text-gray-500">{r.description || '—'}</td>
+                <tr key={r.name} className="border-b border-brand-50 last:border-0">
+                  <td className="px-5 py-3 font-medium text-brand-900 capitalize">{r.name}</td>
+                  <td className="px-5 py-3 text-brand-500">{r.description || '—'}</td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => openEdit(r)} className="btn-secondary !px-3 !py-1.5 text-xs">
                         <Pencil size={13} /> Edit
                       </button>
-                      <button onClick={() => deleteRole(r)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                      <button onClick={() => deleteRole(r)} className="text-brand-400 hover:text-red-500 transition-colors p-1">
                         <Trash2 size={16} />
                       </button>
                     </div>

@@ -34,8 +34,8 @@ export default function ChangePasswordPage() {
   return (
     <div className="max-w-md mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Change Password</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Update your account password</p>
+        <h1 className="text-2xl font-bold text-brand-900">Change Password</h1>
+        <p className="text-sm text-brand-500 mt-0.5">Update your account password</p>
       </div>
 
       <div className="card p-6">
@@ -44,8 +44,8 @@ export default function ChangePasswordPage() {
             <KeyRound size={18} className="text-brand-600" />
           </div>
           <div>
-            <p className="font-medium text-gray-900">Password update</p>
-            <p className="text-xs text-gray-400">Enter your current password and choose a new one</p>
+            <p className="font-medium text-brand-900">Password update</p>
+            <p className="text-xs text-brand-400">Enter your current password and choose a new one</p>
           </div>
         </div>
 
