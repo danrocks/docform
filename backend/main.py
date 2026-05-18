@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os, json
@@ -63,6 +65,16 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="DocForm API", lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    error_msg = exc.errors()[0]["msg"] if exc.errors() else "Validation error"
+    return JSONResponse(
+        status_code=422,
+        content={"detail": error_msg},
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

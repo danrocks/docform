@@ -3,12 +3,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import uuid
 from fastapi import APIRouter, HTTPException, status, Depends, Query, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from auth_utils import require_role, hash_password, get_current_user
 from repositories.factory import get_role_repository, get_user_repository
 from validators import validate_password, validate_username
 from tenant_context import verify_tenant_match
+from config import settings
 
 
 def validate_role(role: str) -> None:
@@ -35,7 +36,7 @@ router = APIRouter()
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    password: str = Field(json_schema_extra={"minLength": settings.MIN_PASSWORD_LENGTH})
     role: str
     name: str
     tenant_id: Optional[str] = None
@@ -53,7 +54,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = Field(default=None, json_schema_extra={"minLength": settings.MIN_PASSWORD_LENGTH})
     role: Optional[str] = None
     name: Optional[str] = None
 
@@ -70,6 +71,11 @@ class UserUpdate(BaseModel):
         if v is not None:
             return validate_password(v)
         return v
+
+
+@router.get("/password-rules")
+def password_rules():
+    return {"min_length": settings.MIN_PASSWORD_LENGTH}
 
 
 @router.get("")
