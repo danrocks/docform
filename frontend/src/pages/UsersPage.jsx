@@ -62,7 +62,7 @@ function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <h2 className="text-lg font-semibold text-brand-900 mb-4">
           {editing ? 'Edit user' : 'New user'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -91,16 +91,16 @@ function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds
           {workgroups.length > 0 && (
             <div>
               <label className="label">Workgroups</label>
-              <div className="border border-gray-200 rounded-lg p-2 space-y-1 max-h-36 overflow-y-auto">
+              <div className="border border-brand-200 rounded-lg p-2 space-y-1 max-h-36 overflow-y-auto">
                 {workgroups.map(wg => (
-                  <label key={wg.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                  <label key={wg.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-brand-50 cursor-pointer">
                     <input type="checkbox" checked={selectedWgs.includes(wg.id)} onChange={() => toggleWg(wg.id)}
-                      className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-                    <span className="text-sm text-gray-700">{wg.name}</span>
+                      className="rounded border-brand-300 text-brand-600 focus:ring-brand-500" />
+                    <span className="text-sm text-brand-700">{wg.name}</span>
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-1">Select workgroups this user belongs to</p>
+              <p className="text-xs text-brand-400 mt-1">Select workgroups this user belongs to</p>
             </div>
           )}
           <div className="flex gap-3 pt-2">
@@ -184,8 +184,8 @@ export default function UsersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage user accounts and roles</p>
+          <h1 className="text-2xl font-bold text-brand-900">Users</h1>
+          <p className="text-sm text-brand-500 mt-0.5">Manage user accounts and roles</p>
         </div>
         <button onClick={openCreate} className="btn-primary">
           <Plus size={16} /> New user
@@ -193,12 +193,12 @@ export default function UsersPage() {
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400 py-16 text-sm">Loading...</div>
+        <div className="text-center text-brand-400 py-16 text-sm">Loading...</div>
       ) : users.length === 0 ? (
         <div className="card p-12 text-center">
-          <Users size={40} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-500 font-medium">No users yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create a user account to get started</p>
+          <Users size={40} className="mx-auto mb-3 text-brand-300" />
+          <p className="text-brand-500 font-medium">No users yet</p>
+          <p className="text-sm text-brand-400 mt-1">Create a user account to get started</p>
           <button onClick={openCreate} className="btn-primary mt-4 mx-auto">
             <Plus size={16} /> Create user
           </button>
@@ -207,19 +207,19 @@ export default function UsersPage() {
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Workgroups</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <tr className="border-b border-brand-100">
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Name</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Username</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Role</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Workgroups</th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map(u => (
-                <tr key={u.id} className="border-b border-gray-50 last:border-0">
-                  <td className="px-5 py-3 font-medium text-gray-900">{u.name}</td>
-                  <td className="px-5 py-3 text-gray-500">{u.username}</td>
+                <tr key={u.id} className="border-b border-brand-50 last:border-0">
+                  <td className="px-5 py-3 font-medium text-brand-900">{u.name}</td>
+                  <td className="px-5 py-3 text-brand-500">{u.username}</td>
                   <td className="px-5 py-3">
                     <span className="badge bg-brand-50 text-brand-700 capitalize">{u.role}</span>
                   </td>
@@ -228,12 +228,12 @@ export default function UsersPage() {
                       {(userWorkgroups[u.id] || []).map(wgId => {
                         const wg = workgroups.find(w => w.id === wgId)
                         return wg ? (
-                          <span key={wgId} className="badge bg-blue-50 text-blue-700 flex items-center gap-0.5">
+                          <span key={wgId} className="badge bg-accent-50 text-accent-700 flex items-center gap-0.5">
                             <Network size={10} /> {wg.name}
                           </span>
                         ) : null
                       })}
-                      {!(userWorkgroups[u.id] || []).length && <span className="text-gray-400 text-xs">&mdash;</span>}
+                      {!(userWorkgroups[u.id] || []).length && <span className="text-brand-400 text-xs">&mdash;</span>}
                     </div>
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -241,7 +241,7 @@ export default function UsersPage() {
                       <button onClick={() => openEdit(u)} className="btn-secondary !px-3 !py-1.5 text-xs">
                         <Pencil size={13} /> Edit
                       </button>
-                      <button onClick={() => deleteUser(u)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                      <button onClick={() => deleteUser(u)} className="text-brand-400 hover:text-red-500 transition-colors p-1">
                         <Trash2 size={16} />
                       </button>
                     </div>

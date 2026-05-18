@@ -104,17 +104,17 @@ function CreateModal({ onClose, onCreated, aiAvailable }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Create template</h2>
+        <h2 className="text-lg font-semibold text-brand-900 mb-4">Create template</h2>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-0.5">
+        <div className="flex gap-1 mb-5 bg-brand-100 rounded-lg p-0.5">
           <button onClick={() => setTab('upload')}
-            className={`flex-1 text-sm font-medium py-2 px-3 rounded-md transition-colors ${tab === 'upload' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`flex-1 text-sm font-medium py-2 px-3 rounded-md transition-colors ${tab === 'upload' ? 'bg-white text-brand-900 shadow-sm' : 'text-brand-500 hover:text-brand-700'}`}>
             <Upload size={14} className="inline mr-1.5 -mt-0.5"/> Upload
           </button>
           {aiAvailable && (
             <button onClick={() => setTab('ai')}
-              className={`flex-1 text-sm font-medium py-2 px-3 rounded-md transition-colors ${tab === 'ai' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`flex-1 text-sm font-medium py-2 px-3 rounded-md transition-colors ${tab === 'ai' ? 'bg-white text-brand-900 shadow-sm' : 'text-brand-500 hover:text-brand-700'}`}>
               <Sparkles size={14} className="inline mr-1.5 -mt-0.5"/> AI Generate
             </button>
           )}
@@ -133,19 +133,19 @@ function CreateModal({ onClose, onCreated, aiAvailable }) {
             <div>
               <label className="label">Word document (.docx) *</label>
               <div {...getRootProps()} className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                isDragActive ? 'border-brand-400 bg-brand-50' : 'border-gray-200 hover:border-gray-300'
+                isDragActive ? 'border-brand-400 bg-brand-50' : 'border-brand-200 hover:border-brand-300'
               }`}>
                 <input {...getInputProps()} />
                 {file ? (
-                  <div className="flex items-center justify-center gap-2 text-sm text-gray-700">
+                  <div className="flex items-center justify-center gap-2 text-sm text-brand-700">
                     <FileText size={16} className="text-brand-600" />
                     {file.name}
                   </div>
                 ) : (
                   <div>
-                    <Upload size={20} className="mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">Drop a .docx file here or <span className="text-brand-600">browse</span></p>
-                    <p className="text-xs text-gray-400 mt-1">Use {'{{field_name}}'} placeholders in your document</p>
+                    <Upload size={20} className="mx-auto mb-2 text-brand-400" />
+                    <p className="text-sm text-brand-500">Drop a .docx file here or <span className="text-brand-600">browse</span></p>
+                    <p className="text-xs text-brand-400 mt-1">Use {'{{field_name}}'} placeholders in your document</p>
                   </div>
                 )}
               </div>
@@ -159,12 +159,12 @@ function CreateModal({ onClose, onCreated, aiAvailable }) {
                 </button>
               </div>
               {showJsonExample && (
-                <pre className="text-xs bg-gray-50 border rounded p-3 mb-2 overflow-x-auto max-h-48 overflow-y-auto">{jsonExample}</pre>
+                <pre className="text-xs bg-brand-50 border rounded p-3 mb-2 overflow-x-auto max-h-48 overflow-y-auto">{jsonExample}</pre>
               )}
               <textarea className="input resize-none font-mono text-xs" rows={4} value={interviewJson}
                 onChange={e => setInterviewJson(e.target.value)}
                 placeholder="Optional: paste a JSON array of interview questions" />
-              <p className="text-xs text-gray-400 mt-1">Leave blank to auto-detect questions from {'{{placeholders}}'} &mdash; you can configure types and settings on the next screen.</p>
+              <p className="text-xs text-brand-400 mt-1">Leave blank to auto-detect questions from {'{{placeholders}}'} &mdash; you can configure types and settings on the next screen.</p>
             </div>
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
@@ -260,8 +260,8 @@ export default function TemplatesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Templates</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Create templates and configure interview questions</p>
+          <h1 className="text-2xl font-bold text-brand-900">Templates</h1>
+          <p className="text-sm text-brand-500 mt-0.5">Create templates and configure interview questions</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="btn-primary">
           <Plus size={16} /> New template
@@ -269,12 +269,12 @@ export default function TemplatesPage() {
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400 py-16 text-sm">Loading...</div>
+        <div className="text-center text-brand-400 py-16 text-sm">Loading...</div>
       ) : templates.length === 0 ? (
         <div className="card p-12 text-center">
-          <FileText size={40} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-500 font-medium">No templates yet</p>
-          <p className="text-sm text-gray-400 mt-1">Upload a Word document or generate one with AI to get started</p>
+          <FileText size={40} className="mx-auto mb-3 text-brand-300" />
+          <p className="text-brand-500 font-medium">No templates yet</p>
+          <p className="text-sm text-brand-400 mt-1">Upload a Word document or generate one with AI to get started</p>
           <button onClick={() => setShowCreate(true)} className="btn-primary mt-4 mx-auto">
             <Plus size={16} /> Create template
           </button>
@@ -288,18 +288,18 @@ export default function TemplatesPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium text-gray-900">{tpl.name}</p>
-                  <span className={`badge ${tpl.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  <p className="font-medium text-brand-900">{tpl.name}</p>
+                  <span className={`badge ${tpl.active ? 'bg-accent-100 text-accent-700' : 'bg-brand-100 text-brand-500'}`}>
                     {tpl.active ? 'Active' : 'Inactive'}
                   </span>
                   {tpl.generation_method === 'ai' && (
-                    <span className="badge bg-purple-100 text-purple-700 flex items-center gap-0.5">
+                    <span className="badge bg-accent-100 text-accent-700 flex items-center gap-0.5">
                       <Sparkles size={10}/> AI
                     </span>
                   )}
                 </div>
-                {tpl.description && <p className="text-sm text-gray-500 truncate mt-0.5">{tpl.description}</p>}
-                <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
+                {tpl.description && <p className="text-sm text-brand-500 truncate mt-0.5">{tpl.description}</p>}
+                <div className="flex items-center gap-4 mt-1 text-xs text-brand-400">
                   <span className="flex items-center gap-1"><ClipboardList size={11}/> {tpl.fields?.length || 0} interview questions</span>
                   <span>{tpl.submission_count || 0} submissions</span>
                   <span>{tpl.original_filename}</span>
@@ -309,7 +309,7 @@ export default function TemplatesPage() {
                     {(templateWorkgroups[tpl.id] || []).map(wgId => {
                       const wg = workgroups.find(w => w.id === wgId)
                       return wg ? (
-                        <span key={wgId} className="badge bg-blue-50 text-blue-700 flex items-center gap-0.5 text-xs">
+                        <span key={wgId} className="badge bg-accent-50 text-accent-700 flex items-center gap-0.5 text-xs">
                           <Network size={10} /> {wg.name}
                         </span>
                       ) : null
@@ -319,14 +319,14 @@ export default function TemplatesPage() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => toggleActive(tpl)} title={tpl.active ? 'Deactivate' : 'Activate'}
-                  className="text-gray-400 hover:text-brand-600 transition-colors">
+                  className="text-brand-400 hover:text-brand-600 transition-colors">
                   {tpl.active ? <ToggleRight size={22} className="text-brand-600"/> : <ToggleLeft size={22}/>}
                 </button>
                 <Link to={`/templates/${tpl.id}/edit`}
                   className="btn-secondary !px-3 !py-1.5 text-xs">
                   <Pencil size={13}/> Edit interview
                 </Link>
-                <button onClick={() => deleteTemplate(tpl)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                <button onClick={() => deleteTemplate(tpl)} className="text-brand-400 hover:text-red-500 transition-colors p-1">
                   <Trash2 size={16}/>
                 </button>
               </div>

@@ -40,28 +40,28 @@ function AddMemberModal({ onClose, onAdded, workgroupId, existingUserIds }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-md p-6 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Add members</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <h2 className="text-lg font-semibold text-brand-900">Add members</h2>
+          <button onClick={onClose} className="text-brand-400 hover:text-brand-600 transition-colors">
             <X size={18} />
           </button>
         </div>
         <div className="relative mb-3">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" />
           <input className="input !pl-9" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users..." />
         </div>
         <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
           {loading ? (
-            <p className="text-sm text-gray-400 text-center py-8">Loading...</p>
+            <p className="text-sm text-brand-400 text-center py-8">Loading...</p>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">
+            <p className="text-sm text-brand-400 text-center py-8">
               {users.length === 0 ? 'All users are already members' : 'No matching users'}
             </p>
           ) : (
             filtered.map(u => (
-              <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+              <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-brand-50">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{u.name}</p>
-                  <p className="text-xs text-gray-400">{u.username} &middot; {u.role}</p>
+                  <p className="text-sm font-medium text-brand-900">{u.name}</p>
+                  <p className="text-xs text-brand-400">{u.username} &middot; {u.role}</p>
                 </div>
                 <button onClick={() => addUser(u)} disabled={adding === u.id}
                   className="btn-primary !px-3 !py-1 text-xs">
@@ -71,7 +71,7 @@ function AddMemberModal({ onClose, onAdded, workgroupId, existingUserIds }) {
             ))
           )}
         </div>
-        <div className="pt-3 mt-3 border-t border-gray-100">
+        <div className="pt-3 mt-3 border-t border-brand-100">
           <button onClick={onClose} className="btn-secondary w-full justify-center">Done</button>
         </div>
       </div>
@@ -114,28 +114,28 @@ function AddTemplateModal({ onClose, onAdded, workgroupId, existingTemplateIds }
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-md p-6 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Add templates</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <h2 className="text-lg font-semibold text-brand-900">Add templates</h2>
+          <button onClick={onClose} className="text-brand-400 hover:text-brand-600 transition-colors">
             <X size={18} />
           </button>
         </div>
         <div className="relative mb-3">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" />
           <input className="input !pl-9" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates..." />
         </div>
         <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
           {loading ? (
-            <p className="text-sm text-gray-400 text-center py-8">Loading...</p>
+            <p className="text-sm text-brand-400 text-center py-8">Loading...</p>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">
+            <p className="text-sm text-brand-400 text-center py-8">
               {templates.length === 0 ? 'All templates are already assigned' : 'No matching templates'}
             </p>
           ) : (
             filtered.map(t => (
-              <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+              <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-brand-50">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{t.name}</p>
-                  {t.description && <p className="text-xs text-gray-400 truncate max-w-[250px]">{t.description}</p>}
+                  <p className="text-sm font-medium text-brand-900">{t.name}</p>
+                  {t.description && <p className="text-xs text-brand-400 truncate max-w-[250px]">{t.description}</p>}
                 </div>
                 <button onClick={() => addTemplate(t)} disabled={adding === t.id}
                   className="btn-primary !px-3 !py-1 text-xs">
@@ -145,7 +145,7 @@ function AddTemplateModal({ onClose, onAdded, workgroupId, existingTemplateIds }
             ))
           )}
         </div>
-        <div className="pt-3 mt-3 border-t border-gray-100">
+        <div className="pt-3 mt-3 border-t border-brand-100">
           <button onClick={onClose} className="btn-secondary w-full justify-center">Done</button>
         </div>
       </div>
@@ -226,34 +226,34 @@ export default function WorkgroupDetailPage() {
   }
 
   if (loading) {
-    return <div className="text-center text-gray-400 py-16 text-sm">Loading...</div>
+    return <div className="text-center text-brand-400 py-16 text-sm">Loading...</div>
   }
 
   if (!workgroup) {
-    return <div className="text-center text-gray-400 py-16 text-sm">Workgroup not found</div>
+    return <div className="text-center text-brand-400 py-16 text-sm">Workgroup not found</div>
   }
 
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 text-sm text-gray-400 mb-4">
+      <div className="flex items-center gap-1.5 text-sm text-brand-400 mb-4">
         <Link to="/workgroups" className="hover:text-brand-600 transition-colors">Workgroups</Link>
         <ChevronRight size={14} />
-        <span className="text-gray-700 font-medium">{workgroup.name}</span>
+        <span className="text-brand-700 font-medium">{workgroup.name}</span>
       </div>
 
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">{workgroup.name}</h1>
+          <h1 className="text-2xl font-bold text-brand-900">{workgroup.name}</h1>
           {workgroup.requires_approval && (
             <span className="badge bg-amber-100 text-amber-700 flex items-center gap-0.5">
               <ShieldCheck size={10} /> Requires approval
             </span>
           )}
         </div>
-        {workgroup.description && <p className="text-sm text-gray-500 mt-1">{workgroup.description}</p>}
-        <p className="text-xs text-gray-400 mt-1">
+        {workgroup.description && <p className="text-sm text-brand-500 mt-1">{workgroup.description}</p>}
+        <p className="text-xs text-brand-400 mt-1">
           Created {new Date(workgroup.created_at).toLocaleDateString()}
         </p>
       </div>
@@ -261,9 +261,9 @@ export default function WorkgroupDetailPage() {
       {/* Members Section */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Users size={18} className="text-gray-400" /> Members
-            <span className="text-sm font-normal text-gray-400">({members.length})</span>
+          <h2 className="text-lg font-semibold text-brand-900 flex items-center gap-2">
+            <Users size={18} className="text-brand-400" /> Members
+            <span className="text-sm font-normal text-brand-400">({members.length})</span>
           </h2>
           <button onClick={() => setShowAddMember(true)} className="btn-primary !py-1.5 text-xs">
             <Plus size={14} /> Add member
@@ -271,30 +271,30 @@ export default function WorkgroupDetailPage() {
         </div>
         {members.length === 0 ? (
           <div className="card p-8 text-center">
-            <Users size={32} className="mx-auto mb-2 text-gray-300" />
-            <p className="text-sm text-gray-400">No members yet. Add users to this workgroup.</p>
+            <Users size={32} className="mx-auto mb-2 text-brand-300" />
+            <p className="text-sm text-brand-400">No members yet. Add users to this workgroup.</p>
           </div>
         ) : (
           <div className="card overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <tr className="border-b border-brand-100">
+                  <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Name</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Username</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Role</th>
+                  <th className="text-right px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {members.map(u => (
-                  <tr key={u.id} className="border-b border-gray-50 last:border-0">
-                    <td className="px-5 py-3 font-medium text-gray-900">{u.name}</td>
-                    <td className="px-5 py-3 text-gray-500">{u.username}</td>
+                  <tr key={u.id} className="border-b border-brand-50 last:border-0">
+                    <td className="px-5 py-3 font-medium text-brand-900">{u.name}</td>
+                    <td className="px-5 py-3 text-brand-500">{u.username}</td>
                     <td className="px-5 py-3">
                       <span className="badge bg-brand-50 text-brand-700 capitalize">{u.role}</span>
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <button onClick={() => removeMember(u)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove from workgroup">
+                      <button onClick={() => removeMember(u)} className="text-brand-400 hover:text-red-500 transition-colors p-1" title="Remove from workgroup">
                         <Trash2 size={16} />
                       </button>
                     </td>
@@ -309,9 +309,9 @@ export default function WorkgroupDetailPage() {
       {/* Templates Section */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <FileText size={18} className="text-gray-400" /> Templates
-            <span className="text-sm font-normal text-gray-400">({templates.length})</span>
+          <h2 className="text-lg font-semibold text-brand-900 flex items-center gap-2">
+            <FileText size={18} className="text-brand-400" /> Templates
+            <span className="text-sm font-normal text-brand-400">({templates.length})</span>
           </h2>
           <button onClick={() => setShowAddTemplate(true)} className="btn-primary !py-1.5 text-xs">
             <Plus size={14} /> Add template
@@ -319,8 +319,8 @@ export default function WorkgroupDetailPage() {
         </div>
         {templates.length === 0 ? (
           <div className="card p-8 text-center">
-            <FileText size={32} className="mx-auto mb-2 text-gray-300" />
-            <p className="text-sm text-gray-400">No templates yet. Add templates to this workgroup.</p>
+            <FileText size={32} className="mx-auto mb-2 text-brand-300" />
+            <p className="text-sm text-brand-400">No templates yet. Add templates to this workgroup.</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -330,13 +330,13 @@ export default function WorkgroupDetailPage() {
                   <FileText size={15} className="text-brand-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">{tpl.name}</p>
-                  {tpl.description && <p className="text-xs text-gray-400 truncate">{tpl.description}</p>}
+                  <p className="text-sm font-medium text-brand-900">{tpl.name}</p>
+                  {tpl.description && <p className="text-xs text-brand-400 truncate">{tpl.description}</p>}
                 </div>
-                <span className={`badge ${tpl.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                <span className={`badge ${tpl.active ? 'bg-accent-100 text-accent-700' : 'bg-brand-100 text-brand-500'}`}>
                   {tpl.active ? 'Active' : 'Inactive'}
                 </span>
-                <button onClick={() => removeTemplate(tpl)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove from workgroup">
+                <button onClick={() => removeTemplate(tpl)} className="text-brand-400 hover:text-red-500 transition-colors p-1" title="Remove from workgroup">
                   <Trash2 size={16} />
                 </button>
               </div>

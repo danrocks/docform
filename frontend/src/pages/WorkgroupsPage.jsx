@@ -144,21 +144,21 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
       <div className="card w-full max-w-lg p-0 max-h-[85vh] flex flex-col">
         <div className="px-6 pt-5 pb-0">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-brand-900">
               {editing ? workgroup.name : 'New workgroup'}
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <button onClick={onClose} className="text-brand-400 hover:text-brand-600 transition-colors">
               <X size={18} />
             </button>
           </div>
           {tabs.length > 1 && (
-            <div className="flex gap-1 border-b border-gray-100 -mx-6 px-6">
+            <div className="flex gap-1 border-b border-brand-100 -mx-6 px-6">
               {tabs.map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
                   className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                     tab === t.id
                       ? 'border-brand-600 text-brand-600'
-                      : 'border-transparent text-gray-400 hover:text-gray-600'
+                      : 'border-transparent text-brand-400 hover:text-brand-600'
                   }`}>
                   {t.label}
                 </button>
@@ -181,15 +181,15 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
               <div className="flex items-center gap-3">
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={requiresApproval} onChange={e => setRequiresApproval(e.target.checked)} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                  <div className="w-9 h-5 bg-brand-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-brand-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
                 </label>
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Requires approval</p>
-                  <p className="text-xs text-gray-400">Submissions from this workgroup need approval before finalizing</p>
+                  <p className="text-sm font-medium text-brand-700">Requires approval</p>
+                  <p className="text-xs text-brand-400">Submissions from this workgroup need approval before finalizing</p>
                 </div>
               </div>
               {editing && workgroup.created_at && (
-                <p className="text-xs text-gray-400">Created {new Date(workgroup.created_at).toLocaleDateString()}</p>
+                <p className="text-xs text-brand-400">Created {new Date(workgroup.created_at).toLocaleDateString()}</p>
               )}
             </form>
           )}
@@ -198,15 +198,15 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
             <div className="space-y-3">
               {members.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Current members</p>
+                  <p className="text-xs font-medium text-brand-500 uppercase tracking-wider mb-2">Current members</p>
                   <div className="space-y-1">
                     {members.map(u => (
-                      <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50">
+                      <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-brand-50">
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{u.name}</p>
-                          <p className="text-xs text-gray-400">{u.username} &middot; {u.role}</p>
+                          <p className="text-sm font-medium text-brand-900">{u.name}</p>
+                          <p className="text-xs text-brand-400">{u.username} &middot; {u.role}</p>
                         </div>
-                        <button onClick={() => removeMember(u)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove">
+                        <button onClick={() => removeMember(u)} className="text-brand-400 hover:text-red-500 transition-colors p-1" title="Remove">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -215,24 +215,24 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
                 </div>
               )}
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Add members</p>
+                <p className="text-xs font-medium text-brand-500 uppercase tracking-wider mb-2">Add members</p>
                 <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" />
                   <input className="input !pl-9 !py-1.5 text-sm" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} placeholder="Search users..." />
                 </div>
                 {membersLoading ? (
-                  <p className="text-sm text-gray-400 text-center py-4">Loading...</p>
+                  <p className="text-sm text-brand-400 text-center py-4">Loading...</p>
                 ) : availableUsers.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">
+                  <p className="text-sm text-brand-400 text-center py-4">
                     {allUsers.length <= members.length ? 'All users are already members' : 'No matching users'}
                   </p>
                 ) : (
                   <div className="space-y-1 max-h-40 overflow-y-auto">
                     {availableUsers.map(u => (
-                      <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                      <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-brand-50">
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{u.name}</p>
-                          <p className="text-xs text-gray-400">{u.username} &middot; {u.role}</p>
+                          <p className="text-sm font-medium text-brand-900">{u.name}</p>
+                          <p className="text-xs text-brand-400">{u.username} &middot; {u.role}</p>
                         </div>
                         <button onClick={() => addMember(u)} disabled={addingUser === u.id}
                           className="btn-primary !px-3 !py-1 text-xs">
@@ -250,18 +250,18 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
             <div className="space-y-3">
               {templates.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Assigned templates</p>
+                  <p className="text-xs font-medium text-brand-500 uppercase tracking-wider mb-2">Assigned templates</p>
                   <div className="space-y-1">
                     {templates.map(tpl => (
-                      <div key={tpl.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50">
+                      <div key={tpl.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-brand-50">
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText size={14} className="text-brand-600 flex-shrink-0" />
-                          <p className="text-sm font-medium text-gray-900 truncate">{tpl.name}</p>
-                          <span className={`badge text-xs flex-shrink-0 ${tpl.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          <p className="text-sm font-medium text-brand-900 truncate">{tpl.name}</p>
+                          <span className={`badge text-xs flex-shrink-0 ${tpl.active ? 'bg-accent-100 text-accent-700' : 'bg-brand-100 text-brand-500'}`}>
                             {tpl.active ? 'Active' : 'Inactive'}
                           </span>
                         </div>
-                        <button onClick={() => removeTemplate(tpl)} className="text-gray-400 hover:text-red-500 transition-colors p-1 flex-shrink-0" title="Remove">
+                        <button onClick={() => removeTemplate(tpl)} className="text-brand-400 hover:text-red-500 transition-colors p-1 flex-shrink-0" title="Remove">
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -270,24 +270,24 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
                 </div>
               )}
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Add templates</p>
+                <p className="text-xs font-medium text-brand-500 uppercase tracking-wider mb-2">Add templates</p>
                 <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" />
                   <input className="input !pl-9 !py-1.5 text-sm" value={templateSearch} onChange={e => setTemplateSearch(e.target.value)} placeholder="Search templates..." />
                 </div>
                 {templatesLoading ? (
-                  <p className="text-sm text-gray-400 text-center py-4">Loading...</p>
+                  <p className="text-sm text-brand-400 text-center py-4">Loading...</p>
                 ) : availableTemplates.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">
+                  <p className="text-sm text-brand-400 text-center py-4">
                     {allTemplates.length <= templates.length ? 'All templates are already assigned' : 'No matching templates'}
                   </p>
                 ) : (
                   <div className="space-y-1 max-h-40 overflow-y-auto">
                     {availableTemplates.map(tpl => (
-                      <div key={tpl.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                      <div key={tpl.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-brand-50">
                         <div className="flex items-center gap-2 min-w-0">
-                          <FileText size={14} className="text-gray-400 flex-shrink-0" />
-                          <p className="text-sm font-medium text-gray-900 truncate">{tpl.name}</p>
+                          <FileText size={14} className="text-brand-400 flex-shrink-0" />
+                          <p className="text-sm font-medium text-brand-900 truncate">{tpl.name}</p>
                         </div>
                         <button onClick={() => addTemplate(tpl)} disabled={addingTemplate === tpl.id}
                           className="btn-primary !px-3 !py-1 text-xs">
@@ -302,7 +302,7 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+        <div className="px-6 py-4 border-t border-brand-100 flex gap-3">
           <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
             {editing ? 'Close' : 'Cancel'}
           </button>
@@ -386,8 +386,8 @@ export default function WorkgroupsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Workgroups</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage workgroups, members, and template access</p>
+          <h1 className="text-2xl font-bold text-brand-900">Workgroups</h1>
+          <p className="text-sm text-brand-500 mt-0.5">Manage workgroups, members, and template access</p>
         </div>
         <button onClick={openCreate} className="btn-primary">
           <Plus size={16} /> New workgroup
@@ -395,12 +395,12 @@ export default function WorkgroupsPage() {
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400 py-16 text-sm">Loading...</div>
+        <div className="text-center text-brand-400 py-16 text-sm">Loading...</div>
       ) : workgroups.length === 0 ? (
         <div className="card p-12 text-center">
-          <Users size={40} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-500 font-medium">No workgroups yet</p>
-          <p className="text-sm text-gray-400 mt-1 max-w-md mx-auto">
+          <Users size={40} className="mx-auto mb-3 text-brand-300" />
+          <p className="text-brand-500 font-medium">No workgroups yet</p>
+          <p className="text-sm text-brand-400 mt-1 max-w-md mx-auto">
             Workgroups let you organize users into teams and control which templates each team can access.
             Create a workgroup, then add members and assign templates to it.
           </p>
@@ -418,19 +418,19 @@ export default function WorkgroupsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900">{wg.name}</span>
+                    <span className="font-medium text-brand-900">{wg.name}</span>
                     {wg.requires_approval && (
                       <span className="badge bg-amber-100 text-amber-700 flex items-center gap-0.5">
                         <ShieldCheck size={10} /> Approval
                       </span>
                     )}
                   </div>
-                  {wg.description && <p className="text-sm text-gray-500 truncate mt-0.5">{wg.description}</p>}
+                  {wg.description && <p className="text-sm text-brand-500 truncate mt-0.5">{wg.description}</p>}
                   <div className="flex items-center gap-3 mt-1.5">
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <span className="flex items-center gap-1 text-xs text-brand-400">
                       <Users size={11} /> {memberCounts[wg.id] ?? '...'} members
                     </span>
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <span className="flex items-center gap-1 text-xs text-brand-400">
                       <FileText size={11} /> {templateCounts[wg.id] ?? '...'} templates
                     </span>
                   </div>
@@ -439,7 +439,7 @@ export default function WorkgroupsPage() {
                   <button onClick={() => openEdit(wg)} className="btn-secondary !px-3 !py-1.5 text-xs">
                     <Pencil size={13} /> Edit
                   </button>
-                  <button onClick={() => deleteWorkgroup(wg)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                  <button onClick={() => deleteWorkgroup(wg)} className="text-brand-400 hover:text-red-500 transition-colors p-1">
                     <Trash2 size={16} />
                   </button>
                 </div>

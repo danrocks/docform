@@ -12,8 +12,8 @@ function StatCard({ icon: Icon, label, value, color }) {
         <Icon size={20} className="text-white" />
       </div>
       <div>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-sm text-gray-500">{label}</p>
+        <p className="text-2xl font-bold text-brand-900">{value}</p>
+        <p className="text-sm text-brand-500">{label}</p>
       </div>
     </div>
   )
@@ -50,10 +50,10 @@ export default function DashboardPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-brand-900">
             Welcome back, {user.name.split(' ')[0]}
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5 capitalize">{user.role} · DocForm</p>
+          <p className="text-sm text-brand-500 mt-0.5 capitalize">{user.role} · DocForm</p>
         </div>
         {(user.role === 'admin' || user.role === 'staff') && (
           <Link to="/submissions/new" className="btn-primary">
@@ -66,24 +66,24 @@ export default function DashboardPage() {
       <div className={`grid gap-4 mb-8 ${user.role === 'admin' ? 'grid-cols-4' : 'grid-cols-3'}`}>
         <StatCard icon={ClipboardList} label="Total submissions" value={stats.total} color="bg-brand-600" />
         <StatCard icon={Clock} label="Awaiting review" value={stats.pending} color="bg-amber-500" />
-        <StatCard icon={CheckCircle} label="Approved" value={stats.approved} color="bg-emerald-500" />
+        <StatCard icon={CheckCircle} label="Approved" value={stats.approved} color="bg-accent-500" />
         {user.role === 'admin' && (
-          <StatCard icon={FileText} label="Templates" value={stats.templates} color="bg-purple-500" />
+          <StatCard icon={FileText} label="Templates" value={stats.templates} color="bg-accent-700" />
         )}
       </div>
 
       {/* Recent submissions */}
       <div className="card">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Recent submissions</h2>
+        <div className="px-5 py-4 border-b border-brand-100 flex items-center justify-between">
+          <h2 className="font-semibold text-brand-900">Recent submissions</h2>
           <Link to="/submissions" className="text-sm text-brand-600 hover:text-brand-700 flex items-center gap-1">
             View all <ArrowRight size={14} />
           </Link>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
+          <div className="p-8 text-center text-brand-400 text-sm">Loading…</div>
         ) : recent.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
+          <div className="p-8 text-center text-brand-400">
             <ClipboardList size={32} className="mx-auto mb-2 opacity-40" />
             <p className="text-sm">No submissions yet</p>
             {(user.role === 'admin' || user.role === 'staff') && (
@@ -95,20 +95,20 @@ export default function DashboardPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Template</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted by</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <tr className="border-b border-brand-100">
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Template</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Submitted by</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">When</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Status</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-brand-50">
               {recent.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 font-medium text-gray-900">{s.template_name}</td>
-                  <td className="px-5 py-3 text-gray-600">{s.submitted_by_name}</td>
-                  <td className="px-5 py-3 text-gray-500">
+                <tr key={s.id} className="hover:bg-brand-50 transition-colors">
+                  <td className="px-5 py-3 font-medium text-brand-900">{s.template_name}</td>
+                  <td className="px-5 py-3 text-brand-600">{s.submitted_by_name}</td>
+                  <td className="px-5 py-3 text-brand-500">
                     {formatDistanceToNow(new Date(s.submitted_at), { addSuffix: true })}
                   </td>
                   <td className="px-5 py-3">
