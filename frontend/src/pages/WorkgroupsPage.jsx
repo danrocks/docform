@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Users, FileText, ShieldCheck, X, Search, ClipboardList } from 'lucide-react'
@@ -484,7 +485,7 @@ export default function WorkgroupsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-brand-900">{wg.name}</span>
+                    <Link to={`/workgroups/${wg.id}`} className="font-medium text-brand-900 hover:text-brand-600 transition-colors">{wg.name}</Link>
                     {wg.requires_approval && (
                       <span className="badge bg-amber-100 text-amber-700 flex items-center gap-0.5">
                         <ShieldCheck size={10} /> Approval
