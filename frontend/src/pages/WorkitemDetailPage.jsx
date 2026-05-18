@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
-import { ChevronRight, ClipboardList, Pencil, Trash2, X } from 'lucide-react'
+import { ChevronRight, ClipboardList, Pencil, Trash2, X, FileText, CheckCircle, Circle } from 'lucide-react'
 
 const STATUS_OPTIONS = ['draft', 'active', 'completed', 'cancelled']
 
@@ -69,18 +69,30 @@ export default function WorkitemDetailPage() {
   const navigate = useNavigate()
   const [workitem, setWorkitem] = useState(null)
   const [workgroup, setWorkgroup] = useState(null)
+  const [templates, setTemplates] = useState([])
+  const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
   const [showEdit, setShowEdit] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
 
   const load = async () => {
     try {
-      const [wiRes, wgRes] = await Promise.all([
+      const [wiRes, wgRes, tplLinksRes, allTplRes, subsRes] = await Promise.all([
         api.get(`/workgroups/${workgroupId}/workitems/${workitemId}`),
         api.get(`/workgroups/${workgroupId}`),
+        api.get(`/workgroups/${workgroupId}/templates`).catch(() => ({ data: [] })),
+        api.get('/templates/').catch(() => ({ data: [] })),
+        api.get('/submissions/').catch(() => ({ data: [] })),
       ])
       setWorkitem(wiRes.data)
       setWorkgroup(wgRes.data)
+
+      const links = Array.isArray(tplLinksRes.data) ? tplLinksRes.data : []
+      const allTpls = Array.isArray(allTplRes.data) ? allTplRes.data : []
+      const tplIds = links.map(l => l.template_id)
+      setTemplates(allTpls.filter(t => tplIds.includes(t.id)))
+
+      setSubmissions(Array.isArray(subsRes.data) ? subsRes.data : [])
     } catch {
       toast.error('Failed to load workitem')
     } finally {
@@ -205,13 +217,61 @@ export default function WorkitemDetailPage() {
         </div>
       </div>
 
-      {/* Interviews placeholder */}
+      {/* Templates & Submissions */}
       <div className="card p-6">
-        <h2 className="text-sm font-medium text-brand-500 uppercase tracking-wider mb-4">Interviews</h2>
-        <div className="text-center py-8">
-          <ClipboardList size={32} className="mx-auto mb-2 text-brand-300" />
-          <p className="text-sm text-brand-400">Interviews for this workitem will appear here.</p>
-        </div>
+        <h2 className="text-sm font-medium text-brand-500 uppercase tracking-wider mb-4">Templates to complete</h2>
+        {templates.length === 0 ? (
+          <div className="text-center py-8">
+            <FileText size={32} className="mx-auto mb-2 text-brand-300" />
+            <p className="text-sm text-brand-400">No templates assigned to this workgroup yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {templates.map(tpl => {
+              const tplSubmissions = submissions.filter(s => s.template_id === tpl.id)
+              const hasSubmission = tplSubmissions.length > 0
+              return (
+                <div key={tpl.id} className="border border-brand-100 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      hasSubmission ? 'bg-green-50' : 'bg-brand-50'
+                    }`}>
+                      {hasSubmission
+                        ? <CheckCircle size={16} className="text-green-600" />
+                        : <Circle size={16} className="text-brand-400" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-brand-900">{tpl.name}</p>
+                      {tpl.description && <p className="text-xs text-brand-400 truncate">{tpl.description}</p>}
+                    </div>
+                    <span className={`badge text-xs ${
+                      hasSubmission ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-500'
+                    }`}>
+                      {hasSubmission ? `${tplSubmissions.length} submission${tplSubmissions.length > 1 ? 's' : ''}` : 'No submissions'}
+                    </span>
+                  </div>
+                  {hasSubmission && (
+                    <div className="mt-3 ml-11 space-y-1">
+                      {tplSubmissions.map(sub => (
+                        <div key={sub.id} className="flex items-center justify-between text-xs">
+                          <Link to={`/submissions/${sub.id}`} className="text-brand-600 hover:text-brand-800 transition-colors">
+                            {sub.id.slice(0, 8)}… — {new Date(sub.submitted_at || sub.created_at).toLocaleDateString()}
+                          </Link>
+                          <span className={`badge text-xs ${
+                            sub.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            sub.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            'bg-brand-100 text-brand-500'
+                          } capitalize`}>{sub.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {showEdit && (
