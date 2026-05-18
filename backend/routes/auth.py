@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from jose import jwt
 from auth_utils import (
     verify_password, create_access_token, get_current_user, hash_password,
@@ -13,6 +13,7 @@ from repositories.factory import get_user_repository
 from rate_limit import check_rate_limit, record_failure, reset
 from validators import validate_password
 from tenant_context import get_current_tenant, is_admin_subdomain, verify_tenant_match
+from config import settings
 
 router = APIRouter()
 
@@ -59,7 +60,7 @@ def me(current_user: dict = Depends(verify_tenant_match)):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(json_schema_extra={"minLength": settings.MIN_PASSWORD_LENGTH})
 
 
 @router.put("/me/password")

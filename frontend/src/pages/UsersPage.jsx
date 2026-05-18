@@ -3,7 +3,7 @@ import api from '../api'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Users, Network } from 'lucide-react'
 
-function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds }) {
+function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds, passwordRules }) {
   const editing = !!user
   const [name, setName] = useState(user?.name || '')
   const [username, setUsername] = useState(user?.username || '')
@@ -11,6 +11,7 @@ function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds
   const [role, setRole] = useState(user?.role || (roles[0]?.name || ''))
   const [selectedWgs, setSelectedWgs] = useState(userWorkgroupIds || [])
   const [loading, setLoading] = useState(false)
+  const minPwLen = passwordRules?.min_length || 8
 
   const toggleWg = wgId => {
     setSelectedWgs(prev => prev.includes(wgId) ? prev.filter(id => id !== wgId) : [...prev, wgId])
@@ -21,6 +22,7 @@ function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds
     if (!name.trim()) return toast.error('Name is required')
     if (!username.trim()) return toast.error('Username is required')
     if (!editing && !password) return toast.error('Password is required')
+    if (password && password.length < minPwLen) return toast.error(`Password must be at least ${minPwLen} characters`)
     setLoading(true)
     try {
       let savedUser
@@ -86,7 +88,8 @@ function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds
             <label className="label">{editing ? 'Password (leave blank to keep current)' : 'Password *'}</label>
             <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)}
               placeholder={editing ? 'Leave blank to keep current' : 'Password'}
-              required={!editing} />
+              required={!editing} minLength={minPwLen} />
+            <p className="text-xs text-brand-400 mt-1">Minimum {minPwLen} characters</p>
           </div>
           {workgroups.length > 0 && (
             <div>
@@ -123,17 +126,20 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [modalUser, setModalUser] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [passwordRules, setPasswordRules] = useState(null)
 
   const load = async () => {
     try {
-      const [usersRes, rolesRes, wgRes] = await Promise.all([
+      const [usersRes, rolesRes, wgRes, pwRulesRes] = await Promise.all([
         api.get('/users'),
         api.get('/roles'),
         api.get('/workgroups').catch(() => ({ data: [] })),
+        api.get('/users/password-rules').catch(() => ({ data: { min_length: 8 } })),
       ])
       setUsers(usersRes.data.users || usersRes.data || [])
       setRoles(rolesRes.data)
       const wgs = Array.isArray(wgRes.data) ? wgRes.data : []
+      setPasswordRules(pwRulesRes.data)
       setWorkgroups(wgs)
 
       const uwMap = {}
@@ -261,6 +267,7 @@ export default function UsersPage() {
           roles={roles}
           workgroups={workgroups}
           userWorkgroupIds={modalUser ? (userWorkgroups[modalUser.id] || []) : []}
+          passwordRules={passwordRules}
         />
       )}
     </div>
