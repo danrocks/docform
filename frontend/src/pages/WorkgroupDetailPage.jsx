@@ -420,7 +420,7 @@ export default function WorkgroupDetailPage() {
                 {workitems.map(wi => (
                   <tr key={wi.id} className="border-b border-brand-50 last:border-0">
                     <td className="px-5 py-3">
-                      <p className="font-medium text-brand-900">{wi.name}</p>
+                      <Link to={`/workgroups/${id}/workitems/${wi.id}`} className="font-medium text-brand-900 hover:text-brand-600 transition-colors">{wi.name}</Link>
                       {wi.description && <p className="text-xs text-brand-400 truncate max-w-[250px]">{wi.description}</p>}
                     </td>
                     <td className="px-5 py-3">
