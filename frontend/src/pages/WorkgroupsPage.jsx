@@ -317,11 +317,63 @@ function WorkgroupModal({ onClose, onSaved, workgroup }) {
   )
 }
 
+function WorkitemCreateModal({ onClose, onCreated, workgroupId }) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async e => {
+    e.preventDefault()
+    if (!name.trim()) return toast.error('Name is required')
+    setSaving(true)
+    try {
+      await api.post(`/workgroups/${workgroupId}/workitems`, { name, description })
+      toast.success('Workitem created')
+      onCreated()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Create failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-brand-900">New workitem</h2>
+          <button onClick={onClose} className="text-brand-400 hover:text-brand-600 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Name *</label>
+            <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Q1 Report" required />
+          </div>
+          <div>
+            <label className="label">Description</label>
+            <input className="input" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+              {saving ? 'Creating...' : 'Create workitem'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function WorkgroupsPage() {
   const [workgroups, setWorkgroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalWorkgroup, setModalWorkgroup] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [showWorkitemModal, setShowWorkitemModal] = useState(false)
+  const [workitemWorkgroupId, setWorkitemWorkgroupId] = useState(null)
   const [memberCounts, setMemberCounts] = useState({})
   const [templateCounts, setTemplateCounts] = useState({})
   const [workitemCounts, setWorkitemCounts] = useState({})
@@ -366,6 +418,13 @@ export default function WorkgroupsPage() {
   const openCreate = () => { setModalWorkgroup(null); setShowModal(true) }
   const openEdit = wg => { setModalWorkgroup(wg); setShowModal(true) }
   const closeModal = () => { setShowModal(false); if (modalWorkgroup) load() }
+
+  const openNewWorkitem = wg => { setWorkitemWorkgroupId(wg.id); setShowWorkitemModal(true) }
+  const handleWorkitemCreated = () => {
+    setShowWorkitemModal(false)
+    setWorkitemWorkgroupId(null)
+    load()
+  }
 
   const handleSaved = data => {
     if (modalWorkgroup) {
@@ -446,6 +505,9 @@ export default function WorkgroupsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  <button onClick={() => openNewWorkitem(wg)} className="btn-primary !px-3 !py-1.5 text-xs">
+                    <ClipboardList size={13} /> New workitem
+                  </button>
                   <button onClick={() => openEdit(wg)} className="btn-secondary !px-3 !py-1.5 text-xs">
                     <Pencil size={13} /> Edit
                   </button>
@@ -464,6 +526,14 @@ export default function WorkgroupsPage() {
           onClose={closeModal}
           onSaved={handleSaved}
           workgroup={modalWorkgroup}
+        />
+      )}
+
+      {showWorkitemModal && workitemWorkgroupId && (
+        <WorkitemCreateModal
+          onClose={() => { setShowWorkitemModal(false); setWorkitemWorkgroupId(null) }}
+          onCreated={handleWorkitemCreated}
+          workgroupId={workitemWorkgroupId}
         />
       )}
     </div>
