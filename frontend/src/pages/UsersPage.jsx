@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react'
 import api from '../api'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, Users } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users, Network } from 'lucide-react'
 
-function UserModal({ onClose, onSaved, user, roles }) {
+function UserModal({ onClose, onSaved, user, roles, workgroups, userWorkgroupIds }) {
   const editing = !!user
   const [name, setName] = useState(user?.name || '')
   const [username, setUsername] = useState(user?.username || '')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState(user?.role || (roles[0]?.name || ''))
+  const [selectedWgs, setSelectedWgs] = useState(userWorkgroupIds || [])
   const [loading, setLoading] = useState(false)
+
+  const toggleWg = wgId => {
+    setSelectedWgs(prev => prev.includes(wgId) ? prev.filter(id => id !== wgId) : [...prev, wgId])
+  }
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -18,17 +23,34 @@ function UserModal({ onClose, onSaved, user, roles }) {
     if (!editing && !password) return toast.error('Password is required')
     setLoading(true)
     try {
+      let savedUser
       if (editing) {
         const body = { name, username, role }
         if (password) body.password = password
         const { data } = await api.put(`/users/${user.id}`, body)
+        savedUser = data
         toast.success('User updated')
-        onSaved(data)
       } else {
         const { data } = await api.post('/users', { name, username, password, role })
+        savedUser = data
         toast.success('User created')
-        onSaved(data)
       }
+
+      if (editing) {
+        const previousIds = userWorkgroupIds || []
+        const toAdd = selectedWgs.filter(id => !previousIds.includes(id))
+        const toRemove = previousIds.filter(id => !selectedWgs.includes(id))
+        await Promise.all([
+          ...toAdd.map(wgId => api.post(`/workgroups/${wgId}/users`, { user_id: savedUser.id }).catch(() => {})),
+          ...toRemove.map(wgId => api.delete(`/workgroups/${wgId}/users/${savedUser.id}`).catch(() => {})),
+        ])
+      } else {
+        await Promise.all(
+          selectedWgs.map(wgId => api.post(`/workgroups/${wgId}/users`, { user_id: savedUser.id }).catch(() => {}))
+        )
+      }
+
+      onSaved(savedUser)
       onClose()
     } catch (err) {
       toast.error(err.response?.data?.detail || (editing ? 'Update failed' : 'Create failed'))
@@ -39,7 +61,7 @@ function UserModal({ onClose, onSaved, user, roles }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-md p-6">
+      <div className="card w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
           {editing ? 'Edit user' : 'New user'}
         </h2>
@@ -66,6 +88,21 @@ function UserModal({ onClose, onSaved, user, roles }) {
               placeholder={editing ? 'Leave blank to keep current' : 'Password'}
               required={!editing} />
           </div>
+          {workgroups.length > 0 && (
+            <div>
+              <label className="label">Workgroups</label>
+              <div className="border border-gray-200 rounded-lg p-2 space-y-1 max-h-36 overflow-y-auto">
+                {workgroups.map(wg => (
+                  <label key={wg.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={selectedWgs.includes(wg.id)} onChange={() => toggleWg(wg.id)}
+                      className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                    <span className="text-sm text-gray-700">{wg.name}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Select workgroups this user belongs to</p>
+            </div>
+          )}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
             <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
@@ -81,18 +118,41 @@ function UserModal({ onClose, onSaved, user, roles }) {
 export default function UsersPage() {
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
+  const [workgroups, setWorkgroups] = useState([])
+  const [userWorkgroups, setUserWorkgroups] = useState({})
   const [loading, setLoading] = useState(true)
   const [modalUser, setModalUser] = useState(null)
   const [showModal, setShowModal] = useState(false)
 
-  const load = () => {
-    Promise.all([
-      api.get('/users'),
-      api.get('/roles'),
-    ]).then(([usersRes, rolesRes]) => {
-      setUsers(usersRes.data.users)
+  const load = async () => {
+    try {
+      const [usersRes, rolesRes, wgRes] = await Promise.all([
+        api.get('/users'),
+        api.get('/roles'),
+        api.get('/workgroups').catch(() => ({ data: [] })),
+      ])
+      setUsers(usersRes.data.users || usersRes.data || [])
       setRoles(rolesRes.data)
-    }).finally(() => setLoading(false))
+      const wgs = Array.isArray(wgRes.data) ? wgRes.data : []
+      setWorkgroups(wgs)
+
+      const uwMap = {}
+      await Promise.all(wgs.map(async wg => {
+        try {
+          const { data } = await api.get(`/workgroups/${wg.id}/users`)
+          const memberIds = Array.isArray(data) ? data.map(m => m.user_id) : []
+          memberIds.forEach(uid => {
+            if (!uwMap[uid]) uwMap[uid] = []
+            uwMap[uid].push(wg.id)
+          })
+        } catch {}
+      }))
+      setUserWorkgroups(uwMap)
+    } catch {
+      toast.error('Failed to load users')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -106,6 +166,7 @@ export default function UsersPage() {
     } else {
       setUsers(us => [data, ...us])
     }
+    load()
   }
 
   const deleteUser = async u => {
@@ -150,6 +211,7 @@ export default function UsersPage() {
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Workgroups</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -160,6 +222,19 @@ export default function UsersPage() {
                   <td className="px-5 py-3 text-gray-500">{u.username}</td>
                   <td className="px-5 py-3">
                     <span className="badge bg-brand-50 text-brand-700 capitalize">{u.role}</span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(userWorkgroups[u.id] || []).map(wgId => {
+                        const wg = workgroups.find(w => w.id === wgId)
+                        return wg ? (
+                          <span key={wgId} className="badge bg-blue-50 text-blue-700 flex items-center gap-0.5">
+                            <Network size={10} /> {wg.name}
+                          </span>
+                        ) : null
+                      })}
+                      {!(userWorkgroups[u.id] || []).length && <span className="text-gray-400 text-xs">&mdash;</span>}
+                    </div>
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -184,6 +259,8 @@ export default function UsersPage() {
           onSaved={handleSaved}
           user={modalUser}
           roles={roles}
+          workgroups={workgroups}
+          userWorkgroupIds={modalUser ? (userWorkgroups[modalUser.id] || []) : []}
         />
       )}
     </div>
