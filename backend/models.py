@@ -120,6 +120,34 @@ class WorkgroupTemplate(Base):
         }
 
 
+class Workitem(Base):
+    __tablename__ = "workitems"
+    __table_args__ = (
+        UniqueConstraint("workgroup_id", "name", name="uq_workitem_workgroup_name"),
+    )
+
+    id = Column(String, primary_key=True)
+    workgroup_id = Column(String, ForeignKey("workgroups.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=False, default="")
+    status = Column(String, nullable=False, default="draft")
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
+    created_at = Column(String, nullable=False)
+    created_by = Column(String, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "workgroup_id": self.workgroup_id,
+            "name": self.name,
+            "description": self.description,
+            "status": self.status,
+            "tenant_id": self.tenant_id,
+            "created_at": self.created_at,
+            "created_by": self.created_by,
+        }
+
+
 class WorkgroupUser(Base):
     __tablename__ = "workgroup_users"
 

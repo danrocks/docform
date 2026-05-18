@@ -12,6 +12,7 @@ import UsersPage from './pages/UsersPage'
 import RolesPage from './pages/RolesPage'
 import WorkgroupsPage from './pages/WorkgroupsPage'
 import WorkgroupDetailPage from './pages/WorkgroupDetailPage'
+import WorkitemDetailPage from './pages/WorkitemDetailPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 
 function PrivateRoute({ children, roles }) {
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="roles" element={<PrivateRoute roles={['admin']}><RolesPage /></PrivateRoute>} />
           <Route path="workgroups" element={<PrivateRoute roles={['admin']}><WorkgroupsPage /></PrivateRoute>} />
           <Route path="workgroups/:id" element={<PrivateRoute roles={['admin']}><WorkgroupDetailPage /></PrivateRoute>} />
+          <Route path="workgroups/:workgroupId/workitems/:workitemId" element={<PrivateRoute><WorkitemDetailPage /></PrivateRoute>} />
           <Route path="change-password" element={<ChangePasswordPage />} />
         </Route>
       </Routes>

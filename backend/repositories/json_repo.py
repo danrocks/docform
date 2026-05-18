@@ -10,6 +10,7 @@ from repositories.base import (
     WorkgroupRepository,
     WorkgroupTemplateRepository,
     WorkgroupUserRepository,
+    WorkitemRepository,
 )
 
 USERS_FILE = Path("data/users.json")
@@ -19,6 +20,7 @@ WORKGROUPS_FILE = Path("data/workgroups.json")
 TEMPLATE_SETTINGS_FILE = Path("data/template_settings.json")
 WORKGROUP_TEMPLATES_FILE = Path("data/workgroup_templates.json")
 WORKGROUP_USERS_FILE = Path("data/workgroup_users.json")
+WORKITEMS_FILE = Path("data/workitems.json")
 
 
 class JsonUserRepository(UserRepository):
@@ -225,6 +227,10 @@ class JsonWorkgroupRepository(WorkgroupRepository):
         wu_repo = JsonWorkgroupUserRepository()
         wu_items = wu_repo._read()
         wu_repo._write([r for r in wu_items if r.get("workgroup_id") != workgroup_id])
+
+        wi_repo = JsonWorkitemRepository()
+        wi_items = wi_repo._read()
+        wi_repo._write([r for r in wi_items if r.get("workgroup_id") != workgroup_id])
         return True
 
     def count(self, tenant_id: str = None) -> int:
@@ -360,3 +366,63 @@ class JsonWorkgroupUserRepository(WorkgroupUserRepository):
 
     def get_user_workgroups(self, user_id: str) -> list[dict]:
         return [r for r in self._read() if r["user_id"] == user_id]
+
+
+class JsonWorkitemRepository(WorkitemRepository):
+    def _read(self) -> list[dict]:
+        if not WORKITEMS_FILE.exists():
+            return []
+        return json.loads(WORKITEMS_FILE.read_text())
+
+    def _write(self, items: list[dict]) -> None:
+        WORKITEMS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        WORKITEMS_FILE.write_text(json.dumps(items, indent=2))
+
+    def get_all(self, tenant_id: str = None) -> list[dict]:
+        items = self._read()
+        if tenant_id is not None:
+            items = [w for w in items if w.get("tenant_id") == tenant_id]
+        return items
+
+    def get_by_id(self, workitem_id: str) -> Optional[dict]:
+        return next((w for w in self._read() if w["id"] == workitem_id), None)
+
+    def create(self, workitem: dict) -> dict:
+        items = self._read()
+        items.append(workitem)
+        self._write(items)
+        return workitem
+
+    def update(self, workitem_id: str, data: dict) -> Optional[dict]:
+        items = self._read()
+        for i, w in enumerate(items):
+            if w["id"] == workitem_id:
+                items[i].update(data)
+                self._write(items)
+                return items[i]
+        return None
+
+    def delete(self, workitem_id: str) -> bool:
+        items = self._read()
+        new_items = [w for w in items if w["id"] != workitem_id]
+        if len(new_items) == len(items):
+            return False
+        self._write(new_items)
+        return True
+
+    def count(self, tenant_id: str = None) -> int:
+        items = self._read()
+        if tenant_id is not None:
+            items = [w for w in items if w.get("tenant_id") == tenant_id]
+        return len(items)
+
+    def get_by_workgroup(self, workgroup_id: str) -> list[dict]:
+        return [w for w in self._read() if w.get("workgroup_id") == workgroup_id]
+
+    def name_exists_in_workgroup(self, workgroup_id: str, name: str, exclude_id: str = None) -> bool:
+        for w in self._read():
+            if w.get("workgroup_id") == workgroup_id and w.get("name") == name:
+                if exclude_id and w["id"] == exclude_id:
+                    continue
+                return True
+        return False

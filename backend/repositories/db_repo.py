@@ -14,6 +14,7 @@ from models import (
     Workgroup,
     WorkgroupTemplate,
     WorkgroupUser,
+    Workitem,
 )
 from repositories.base import (
     RoleRepository,
@@ -23,6 +24,7 @@ from repositories.base import (
     WorkgroupRepository,
     WorkgroupTemplateRepository,
     WorkgroupUserRepository,
+    WorkitemRepository,
 )
 
 
@@ -377,6 +379,74 @@ class DbWorkgroupUserRepository(WorkgroupUserRepository):
                 .all()
             )
             return [r.to_dict() for r in rows]
+
+
+class DbWorkitemRepository(WorkitemRepository):
+    def get_all(self, tenant_id: str = None) -> list[dict]:
+        with get_session() as session:
+            q = session.query(Workitem)
+            if tenant_id is not None:
+                q = q.filter(Workitem.tenant_id == tenant_id)
+            return [w.to_dict() for w in q.all()]
+
+    def get_by_id(self, workitem_id: str) -> Optional[dict]:
+        with get_session() as session:
+            wi = session.get(Workitem, workitem_id)
+            return wi.to_dict() if wi else None
+
+    def create(self, workitem: dict) -> dict:
+        with get_session() as session:
+            db_wi = Workitem(**workitem)
+            session.add(db_wi)
+            session.commit()
+            session.refresh(db_wi)
+            return db_wi.to_dict()
+
+    def update(self, workitem_id: str, data: dict) -> Optional[dict]:
+        with get_session() as session:
+            wi = session.get(Workitem, workitem_id)
+            if not wi:
+                return None
+            for key, value in data.items():
+                setattr(wi, key, value)
+            session.commit()
+            session.refresh(wi)
+            return wi.to_dict()
+
+    def delete(self, workitem_id: str) -> bool:
+        with get_session() as session:
+            wi = session.get(Workitem, workitem_id)
+            if not wi:
+                return False
+            session.delete(wi)
+            session.commit()
+            return True
+
+    def count(self, tenant_id: str = None) -> int:
+        with get_session() as session:
+            q = session.query(Workitem)
+            if tenant_id is not None:
+                q = q.filter(Workitem.tenant_id == tenant_id)
+            return q.count()
+
+    def get_by_workgroup(self, workgroup_id: str) -> list[dict]:
+        with get_session() as session:
+            rows = (
+                session.query(Workitem)
+                .filter(Workitem.workgroup_id == workgroup_id)
+                .all()
+            )
+            return [r.to_dict() for r in rows]
+
+    def name_exists_in_workgroup(self, workgroup_id: str, name: str, exclude_id: str = None) -> bool:
+        with get_session() as session:
+            q = session.query(Workitem).filter(
+                Workitem.workgroup_id == workgroup_id,
+                Workitem.name == name,
+            )
+            if exclude_id:
+                q = q.filter(Workitem.id != exclude_id)
+            return q.first() is not None
 
 
 def create_tables() -> None:

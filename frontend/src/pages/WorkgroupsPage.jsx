@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, Users, FileText, ShieldCheck, X, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users, FileText, ShieldCheck, X, Search, ClipboardList, Eye } from 'lucide-react'
 
 function WorkgroupModal({ onClose, onSaved, workgroup }) {
   const editing = !!workgroup
@@ -322,8 +323,10 @@ export default function WorkgroupsPage() {
   const [loading, setLoading] = useState(true)
   const [modalWorkgroup, setModalWorkgroup] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const navigate = useNavigate()
   const [memberCounts, setMemberCounts] = useState({})
   const [templateCounts, setTemplateCounts] = useState({})
+  const [workitemCounts, setWorkitemCounts] = useState({})
 
   const load = async () => {
     try {
@@ -333,21 +336,26 @@ export default function WorkgroupsPage() {
 
       const counts = {}
       const tCounts = {}
+      const wiCounts = {}
       await Promise.all(wgs.map(async wg => {
         try {
-          const [usersRes, templatesRes] = await Promise.all([
+          const [usersRes, templatesRes, workitemsRes] = await Promise.all([
             api.get(`/workgroups/${wg.id}/users`),
             api.get(`/workgroups/${wg.id}/templates`),
+            api.get(`/workgroups/${wg.id}/workitems`).catch(() => ({ data: [] })),
           ])
           counts[wg.id] = Array.isArray(usersRes.data) ? usersRes.data.length : 0
           tCounts[wg.id] = Array.isArray(templatesRes.data) ? templatesRes.data.length : 0
+          wiCounts[wg.id] = Array.isArray(workitemsRes.data) ? workitemsRes.data.length : 0
         } catch {
           counts[wg.id] = 0
           tCounts[wg.id] = 0
+          wiCounts[wg.id] = 0
         }
       }))
       setMemberCounts(counts)
       setTemplateCounts(tCounts)
+      setWorkitemCounts(wiCounts)
     } catch (err) {
       toast.error('Failed to load workgroups')
     } finally {
@@ -368,6 +376,7 @@ export default function WorkgroupsPage() {
       setWorkgroups(wgs => [data, ...wgs])
       setMemberCounts(c => ({ ...c, [data.id]: 0 }))
       setTemplateCounts(c => ({ ...c, [data.id]: 0 }))
+      setWorkitemCounts(c => ({ ...c, [data.id]: 0 }))
     }
   }
 
@@ -433,9 +442,15 @@ export default function WorkgroupsPage() {
                     <span className="flex items-center gap-1 text-xs text-brand-400">
                       <FileText size={11} /> {templateCounts[wg.id] ?? '...'} templates
                     </span>
+                    <span className="flex items-center gap-1 text-xs text-brand-400">
+                      <ClipboardList size={11} /> {workitemCounts[wg.id] ?? '...'} workitems
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  <button onClick={() => navigate(`/workgroups/${wg.id}`)} className="btn-primary !px-3 !py-1.5 text-xs">
+                    <Eye size={13} /> View
+                  </button>
                   <button onClick={() => openEdit(wg)} className="btn-secondary !px-3 !py-1.5 text-xs">
                     <Pencil size={13} /> Edit
                   </button>
@@ -456,6 +471,7 @@ export default function WorkgroupsPage() {
           workgroup={modalWorkgroup}
         />
       )}
+
     </div>
   )
 }
