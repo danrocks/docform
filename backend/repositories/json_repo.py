@@ -492,9 +492,9 @@ class JsonAnswersetMetadataRepository(AnswersetMetadataRepository):
             filtered.append(m)
         return filtered
 
-    def count(self, tenant_id: str = None, user_id: str = None, workgroup_ids: list = None) -> int:
+    def count(self, tenant_id: str = None, user_id: str = None, workgroup_ids: list = None, template_id: str = None) -> int:
         items = self._read()
-        return len(self._filter(items, tenant_id=tenant_id, user_id=user_id, workgroup_ids=workgroup_ids))
+        return len(self._filter(items, tenant_id=tenant_id, user_id=user_id, workgroup_ids=workgroup_ids, template_id=template_id))
 
     def get_paginated(
         self, skip: int = 0, limit: int = 20, tenant_id: str = None,

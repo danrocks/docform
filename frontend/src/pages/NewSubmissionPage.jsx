@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
@@ -504,9 +504,10 @@ export default function NewSubmissionPage() {
   const [context, setContext] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submission, setSubmission] = useState(null)
-  const [autoSaveId, setAutoSaveId] = useState(null)
-  const [autoSaveVersion, setAutoSaveVersion] = useState(1)
   const [autoSaveStatus, setAutoSaveStatus] = useState(null) // 'saving' | 'saved' | 'error'
+  const autoSaveIdRef = useRef(null)
+  const autoSaveVersionRef = useRef(1)
+  const savingRef = useRef(false)
 
   useEffect(() => {
     api.get('/templates/').then(r => setTemplates(r.data.filter(t => t.active)))
@@ -519,15 +520,17 @@ export default function NewSubmissionPage() {
     if (Object.keys(formData).length === 0) return
 
     const timer = setTimeout(async () => {
+      if (savingRef.current) return
+      savingRef.current = true
       setAutoSaveStatus('saving')
       try {
-        if (autoSaveId) {
-          const { data } = await api.put(`/answersets/${autoSaveId}`, {
+        if (autoSaveIdRef.current) {
+          const { data } = await api.put(`/answersets/${autoSaveIdRef.current}`, {
             data: formData,
             context,
-            version: autoSaveVersion,
+            version: autoSaveVersionRef.current,
           })
-          setAutoSaveVersion(data.metadata?.version || autoSaveVersion + 1)
+          autoSaveVersionRef.current = data.metadata?.version || autoSaveVersionRef.current + 1
           setAutoSaveStatus('saved')
         } else {
           const { data } = await api.post('/answersets/', {
@@ -535,12 +538,14 @@ export default function NewSubmissionPage() {
             data: formData,
             context,
           })
-          setAutoSaveId(data.id)
-          setAutoSaveVersion(data.metadata?.version || 1)
+          autoSaveIdRef.current = data.id
+          autoSaveVersionRef.current = data.metadata?.version || 1
           setAutoSaveStatus('saved')
         }
       } catch {
         setAutoSaveStatus('error')
+      } finally {
+        savingRef.current = false
       }
     }, 3000)
 
@@ -555,7 +560,7 @@ export default function NewSubmissionPage() {
     [],
   )
 
-  const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null); setAutoSaveId(null); setAutoSaveVersion(1); setAutoSaveStatus(null) }
+  const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null); autoSaveIdRef.current = null; autoSaveVersionRef.current = 1; setAutoSaveStatus(null) }
 
   const handleSubmit = async () => {
     setSubmitting(true)

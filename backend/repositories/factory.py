@@ -86,18 +86,12 @@ def get_workitem_repository() -> WorkitemRepository:
 
 
 def get_answerset_metadata_repository() -> AnswersetMetadataRepository:
-    if settings.STORAGE_BACKEND == "json":
-        from repositories.json_repo import JsonAnswersetMetadataRepository
-        return JsonAnswersetMetadataRepository()
-    else:
-        from repositories.json_repo import JsonAnswersetMetadataRepository
-        return JsonAnswersetMetadataRepository()
+    # TODO: implement DbAnswersetMetadataRepository when DB migration is added
+    from repositories.json_repo import JsonAnswersetMetadataRepository
+    return JsonAnswersetMetadataRepository()
 
 
 def get_audit_log_repository() -> AuditLogRepository:
-    if settings.STORAGE_BACKEND == "json":
-        from repositories.json_repo import JsonAuditLogRepository
-        return JsonAuditLogRepository()
-    else:
-        from repositories.json_repo import JsonAuditLogRepository
-        return JsonAuditLogRepository()
+    # TODO: implement DbAuditLogRepository when DB migration is added
+    from repositories.json_repo import JsonAuditLogRepository
+    return JsonAuditLogRepository()

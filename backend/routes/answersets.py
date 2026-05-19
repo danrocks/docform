@@ -262,7 +262,7 @@ def list_answersets(
             user_id=user_id, workgroup_ids=workgroup_ids,
             template_id=template_id,
         )
-        total = meta_repo.count(tenant_id=tenant_id, user_id=user_id, workgroup_ids=workgroup_ids)
+        total = meta_repo.count(tenant_id=tenant_id, user_id=user_id, workgroup_ids=workgroup_ids, template_id=template_id)
 
     return {"answersets": items, "total": total, "skip": skip, "limit": limit}
 
