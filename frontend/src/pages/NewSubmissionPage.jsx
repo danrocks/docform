@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
 import { FileText, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react'
@@ -497,6 +497,10 @@ function Success({ submission, onNew }) {
 }
 
 export default function NewSubmissionPage() {
+  const [searchParams] = useSearchParams()
+  const preselectedTemplateId = searchParams.get('template')
+  const preselectedWorkgroup = searchParams.get('workgroup')
+
   const [templates, setTemplates] = useState([])
   const [step, setStep] = useState(1)
   const [selected, setSelected] = useState(null)
@@ -510,9 +514,20 @@ export default function NewSubmissionPage() {
   const savingRef = useRef(false)
 
   useEffect(() => {
-    api.get('/templates/').then(r => setTemplates(r.data.filter(t => t.active)))
-      .catch(() => toast.error('Failed to load templates'))
-  }, [])
+    api.get('/templates/').then(r => {
+      const active = r.data.filter(t => t.active)
+      setTemplates(active)
+      // Auto-select template if provided via URL params
+      if (preselectedTemplateId && !selected) {
+        const match = active.find(t => t.id === preselectedTemplateId)
+        if (match) {
+          setSelected(match)
+          setFormData({})
+          setStep(2)
+        }
+      }
+    }).catch(() => toast.error('Failed to load templates'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-save: debounced save to answersets API when form data changes
   useEffect(() => {
@@ -565,11 +580,13 @@ export default function NewSubmissionPage() {
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
-      const { data } = await api.post('/submissions/', {
+      const payload = {
         template_id: selected.id,
         data: formData,
         context,
-      })
+      }
+      if (preselectedWorkgroup) payload.workgroup_id = preselectedWorkgroup
+      const { data } = await api.post('/submissions/', payload)
       setSubmission(data)
       setStep(3)
     } catch (err) {

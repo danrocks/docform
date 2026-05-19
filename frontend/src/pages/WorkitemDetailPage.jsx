@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
-import { ChevronRight, ClipboardList, Pencil, Trash2, X, FileText, CheckCircle, Circle } from 'lucide-react'
+import { ChevronRight, ClipboardList, Pencil, Trash2, X, FileText, CheckCircle, Circle, ExternalLink, Download, Play } from 'lucide-react'
 
 const STATUS_OPTIONS = ['draft', 'active', 'completed', 'cancelled']
 
@@ -217,7 +217,7 @@ export default function WorkitemDetailPage() {
         </div>
       </div>
 
-      {/* Templates & Submissions */}
+      {/* Templates to complete */}
       <div className="card p-6">
         <h2 className="text-sm font-medium text-brand-500 uppercase tracking-wider mb-4">Templates to complete</h2>
         {templates.length === 0 ? (
@@ -230,39 +230,108 @@ export default function WorkitemDetailPage() {
             {templates.map(tpl => {
               const tplSubmissions = submissions.filter(s => s.template_id === tpl.id)
               const hasSubmission = tplSubmissions.length > 0
+              const latestSub = hasSubmission
+                ? tplSubmissions.sort((a, b) => (b.submitted_at || '').localeCompare(a.submitted_at || ''))[0]
+                : null
+              const isComplete = latestSub && ['generated', 'approved'].includes(latestSub.status)
+              const isPartial = latestSub && ['pending'].includes(latestSub.status)
               return (
                 <div key={tpl.id} className="border border-brand-100 rounded-lg p-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      hasSubmission ? 'bg-green-50' : 'bg-brand-50'
+                      isComplete ? 'bg-green-50' : isPartial ? 'bg-amber-50' : 'bg-brand-50'
                     }`}>
-                      {hasSubmission
+                      {isComplete
                         ? <CheckCircle size={16} className="text-green-600" />
-                        : <Circle size={16} className="text-brand-400" />
+                        : isPartial
+                          ? <Circle size={16} className="text-amber-500" />
+                          : <Circle size={16} className="text-brand-400" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-brand-900">{tpl.name}</p>
                       {tpl.description && <p className="text-xs text-brand-400 truncate">{tpl.description}</p>}
+                      {isComplete && <p className="text-xs text-green-600 mt-0.5">Completed</p>}
+                      {isPartial && <p className="text-xs text-amber-600 mt-0.5">In progress</p>}
                     </div>
-                    <span className={`badge text-xs ${
-                      hasSubmission ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-500'
-                    }`}>
-                      {hasSubmission ? `${tplSubmissions.length} submission${tplSubmissions.length > 1 ? 's' : ''}` : 'No submissions'}
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {hasSubmission ? (
+                        <Link
+                          to={`/submissions/${latestSub.id}`}
+                          className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1"
+                        >
+                          <ExternalLink size={12} /> {isComplete ? 'Reopen' : 'Continue'}
+                        </Link>
+                      ) : (
+                        <Link
+                          to={`/submissions/new?template=${tpl.id}&workgroup=${workgroupId}`}
+                          className="btn-primary !px-3 !py-1.5 text-xs inline-flex items-center gap-1"
+                        >
+                          <Play size={12} /> Start
+                        </Link>
+                      )}
+                    </div>
                   </div>
+                  {/* Document links for completed/partial answersets */}
                   {hasSubmission && (
-                    <div className="mt-3 ml-11 space-y-1">
+                    <div className="mt-3 ml-11 space-y-2">
                       {tplSubmissions.map(sub => (
-                        <div key={sub.id} className="flex items-center justify-between text-xs">
-                          <Link to={`/submissions/${sub.id}`} className="text-brand-600 hover:text-brand-800 transition-colors">
+                        <div key={sub.id} className="flex items-center gap-3 text-xs border-b border-brand-50 pb-2 last:border-0 last:pb-0">
+                          <Link to={`/submissions/${sub.id}`} className="text-brand-600 hover:text-brand-800 transition-colors flex-1 min-w-0">
                             {sub.id.slice(0, 8)}… — {new Date(sub.submitted_at || sub.created_at).toLocaleDateString()}
                           </Link>
                           <span className={`badge text-xs ${
                             sub.status === 'approved' ? 'bg-green-100 text-green-700' :
                             sub.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            sub.status === 'generated' ? 'bg-accent-100 text-accent-700' :
                             'bg-brand-100 text-brand-500'
                           } capitalize`}>{sub.status}</span>
+                          {(sub.docx_path || sub.pdf_path) && (
+                            <div className="flex items-center gap-1.5">
+                              {sub.docx_path && (
+                                <a
+                                  href="#"
+                                  onClick={async e => {
+                                    e.preventDefault()
+                                    try {
+                                      const resp = await api.get(`/submissions/${sub.id}/download/docx`, { responseType: 'blob' })
+                                      const url = URL.createObjectURL(resp.data)
+                                      const a = document.createElement('a')
+                                      a.href = url
+                                      a.download = `${tpl.name.replace(/\s+/g, '_')}_${sub.id.slice(0, 8)}.docx`
+                                      a.click()
+                                      URL.revokeObjectURL(url)
+                                    } catch { toast.error('Download failed') }
+                                  }}
+                                  className="text-brand-500 hover:text-brand-700 transition-colors"
+                                  title="Download .docx"
+                                >
+                                  <Download size={12} />
+                                </a>
+                              )}
+                              {sub.pdf_path && (
+                                <a
+                                  href="#"
+                                  onClick={async e => {
+                                    e.preventDefault()
+                                    try {
+                                      const resp = await api.get(`/submissions/${sub.id}/download/pdf`, { responseType: 'blob' })
+                                      const url = URL.createObjectURL(resp.data)
+                                      const a = document.createElement('a')
+                                      a.href = url
+                                      a.download = `${tpl.name.replace(/\s+/g, '_')}_${sub.id.slice(0, 8)}.pdf`
+                                      a.click()
+                                      URL.revokeObjectURL(url)
+                                    } catch { toast.error('Download failed') }
+                                  }}
+                                  className="text-red-500 hover:text-red-700 transition-colors"
+                                  title="Download PDF"
+                                >
+                                  <Download size={12} />
+                                </a>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
