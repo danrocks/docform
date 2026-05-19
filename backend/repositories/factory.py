@@ -1,5 +1,7 @@
 from config import settings
 from repositories.base import (
+    AnswersetMetadataRepository,
+    AuditLogRepository,
     RoleRepository,
     TemplateSettingsRepository,
     TenantRepository,
@@ -81,3 +83,21 @@ def get_workitem_repository() -> WorkitemRepository:
     else:
         from repositories.db_repo import DbWorkitemRepository
         return DbWorkitemRepository()
+
+
+def get_answerset_metadata_repository() -> AnswersetMetadataRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonAnswersetMetadataRepository
+        return JsonAnswersetMetadataRepository()
+    else:
+        from repositories.json_repo import JsonAnswersetMetadataRepository
+        return JsonAnswersetMetadataRepository()
+
+
+def get_audit_log_repository() -> AuditLogRepository:
+    if settings.STORAGE_BACKEND == "json":
+        from repositories.json_repo import JsonAuditLogRepository
+        return JsonAuditLogRepository()
+    else:
+        from repositories.json_repo import JsonAuditLogRepository
+        return JsonAuditLogRepository()

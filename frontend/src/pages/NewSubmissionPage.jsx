@@ -504,11 +504,48 @@ export default function NewSubmissionPage() {
   const [context, setContext] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submission, setSubmission] = useState(null)
+  const [autoSaveId, setAutoSaveId] = useState(null)
+  const [autoSaveVersion, setAutoSaveVersion] = useState(1)
+  const [autoSaveStatus, setAutoSaveStatus] = useState(null) // 'saving' | 'saved' | 'error'
 
   useEffect(() => {
     api.get('/templates/').then(r => setTemplates(r.data.filter(t => t.active)))
       .catch(() => toast.error('Failed to load templates'))
   }, [])
+
+  // Auto-save: debounced save to answersets API when form data changes
+  useEffect(() => {
+    if (!selected || step !== 2) return
+    if (Object.keys(formData).length === 0) return
+
+    const timer = setTimeout(async () => {
+      setAutoSaveStatus('saving')
+      try {
+        if (autoSaveId) {
+          const { data } = await api.put(`/answersets/${autoSaveId}`, {
+            data: formData,
+            context,
+            version: autoSaveVersion,
+          })
+          setAutoSaveVersion(data.metadata?.version || autoSaveVersion + 1)
+          setAutoSaveStatus('saved')
+        } else {
+          const { data } = await api.post('/answersets/', {
+            template_id: selected.id,
+            data: formData,
+            context,
+          })
+          setAutoSaveId(data.id)
+          setAutoSaveVersion(data.metadata?.version || 1)
+          setAutoSaveStatus('saved')
+        }
+      } catch {
+        setAutoSaveStatus('error')
+      }
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [formData, context, selected, step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stable callback so the expression-recompute effect inside FillForm only
   // re-runs when `data` or `template` actually change, not on every render of
@@ -518,7 +555,7 @@ export default function NewSubmissionPage() {
     [],
   )
 
-  const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null) }
+  const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null); setAutoSaveId(null); setAutoSaveVersion(1); setAutoSaveStatus(null) }
 
   const handleSubmit = async () => {
     setSubmitting(true)
@@ -566,6 +603,13 @@ export default function NewSubmissionPage() {
       </div>
 
       <div className="card p-6 max-w-2xl">
+        {step === 2 && autoSaveStatus && (
+          <div className="mb-3 flex items-center gap-2 text-xs">
+            {autoSaveStatus === 'saving' && <span className="text-brand-400">Auto-saving…</span>}
+            {autoSaveStatus === 'saved' && <span className="text-accent-600">Auto-saved</span>}
+            {autoSaveStatus === 'error' && <span className="text-red-500">Auto-save failed</span>}
+          </div>
+        )}
         {step === 1 && (
           templates.length === 0
             ? <div className="text-center py-8 text-brand-400 text-sm">No active templates available. Ask an admin to create one.</div>

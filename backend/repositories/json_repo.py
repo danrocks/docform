@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Optional
 
 from repositories.base import (
+    AnswersetMetadataRepository,
+    AuditLogRepository,
     RoleRepository,
     TemplateSettingsRepository,
     TenantRepository,
@@ -21,6 +23,8 @@ TEMPLATE_SETTINGS_FILE = Path("data/template_settings.json")
 WORKGROUP_TEMPLATES_FILE = Path("data/workgroup_templates.json")
 WORKGROUP_USERS_FILE = Path("data/workgroup_users.json")
 WORKITEMS_FILE = Path("data/workitems.json")
+ANSWERSET_METADATA_FILE = Path("data/answerset_metadata.json")
+AUDIT_LOG_FILE = Path("data/audit_log.json")
 
 
 class JsonUserRepository(UserRepository):
@@ -426,3 +430,119 @@ class JsonWorkitemRepository(WorkitemRepository):
                     continue
                 return True
         return False
+
+
+class JsonAnswersetMetadataRepository(AnswersetMetadataRepository):
+    def _read(self) -> list[dict]:
+        if not ANSWERSET_METADATA_FILE.exists():
+            return []
+        return json.loads(ANSWERSET_METADATA_FILE.read_text())
+
+    def _write(self, items: list[dict]) -> None:
+        ANSWERSET_METADATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        ANSWERSET_METADATA_FILE.write_text(json.dumps(items, indent=2))
+
+    def get_all(self, tenant_id: str = None) -> list[dict]:
+        items = self._read()
+        if tenant_id is not None:
+            items = [m for m in items if m.get("tenant_id") == tenant_id]
+        return sorted(items, key=lambda x: x.get("submitted_at", ""), reverse=True)
+
+    def get_by_id(self, answerset_id: str) -> Optional[dict]:
+        return next((m for m in self._read() if m["id"] == answerset_id), None)
+
+    def create(self, metadata: dict) -> dict:
+        items = self._read()
+        items.append(metadata)
+        self._write(items)
+        return metadata
+
+    def update(self, answerset_id: str, data: dict) -> Optional[dict]:
+        items = self._read()
+        for i, m in enumerate(items):
+            if m["id"] == answerset_id:
+                items[i].update(data)
+                self._write(items)
+                return items[i]
+        return None
+
+    def delete(self, answerset_id: str) -> bool:
+        items = self._read()
+        new_items = [m for m in items if m["id"] != answerset_id]
+        if len(new_items) == len(items):
+            return False
+        self._write(new_items)
+        return True
+
+    def _filter(self, items: list[dict], tenant_id: str = None,
+                user_id: str = None, workgroup_ids: list = None,
+                template_id: str = None) -> list[dict]:
+        filtered = []
+        for m in items:
+            if tenant_id and m.get("tenant_id") != tenant_id:
+                continue
+            if template_id and m.get("template_id") != template_id:
+                continue
+            if user_id and workgroup_ids is not None:
+                is_owner = m.get("submitted_by") == user_id
+                is_workgroup = m.get("workgroup_id") in workgroup_ids if m.get("workgroup_id") else False
+                is_shared = user_id in (m.get("shared_with") or [])
+                if not (is_owner or is_workgroup or is_shared):
+                    continue
+            filtered.append(m)
+        return filtered
+
+    def count(self, tenant_id: str = None, user_id: str = None, workgroup_ids: list = None) -> int:
+        items = self._read()
+        return len(self._filter(items, tenant_id=tenant_id, user_id=user_id, workgroup_ids=workgroup_ids))
+
+    def get_paginated(
+        self, skip: int = 0, limit: int = 20, tenant_id: str = None,
+        user_id: str = None, workgroup_ids: list = None,
+        template_id: str = None,
+    ) -> list[dict]:
+        items = self._read()
+        filtered = self._filter(items, tenant_id=tenant_id, user_id=user_id,
+                                workgroup_ids=workgroup_ids, template_id=template_id)
+        filtered.sort(key=lambda x: x.get("submitted_at", ""), reverse=True)
+        return filtered[skip:skip + limit]
+
+    def get_by_workgroup(self, workgroup_id: str) -> list[dict]:
+        return [m for m in self._read() if m.get("workgroup_id") == workgroup_id]
+
+    def get_shared_with_user(self, user_id: str) -> list[dict]:
+        return [m for m in self._read() if user_id in (m.get("shared_with") or [])]
+
+
+class JsonAuditLogRepository(AuditLogRepository):
+    def _read(self) -> list[dict]:
+        if not AUDIT_LOG_FILE.exists():
+            return []
+        return json.loads(AUDIT_LOG_FILE.read_text())
+
+    def _write(self, items: list[dict]) -> None:
+        AUDIT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        AUDIT_LOG_FILE.write_text(json.dumps(items, indent=2))
+
+    def create(self, entry: dict) -> dict:
+        items = self._read()
+        items.append(entry)
+        self._write(items)
+        return entry
+
+    def get_by_answerset(self, answerset_id: str) -> list[dict]:
+        items = [e for e in self._read() if e.get("answerset_id") == answerset_id]
+        return sorted(items, key=lambda x: x.get("timestamp", ""), reverse=True)
+
+    def get_all(self, tenant_id: str = None, skip: int = 0, limit: int = 50) -> list[dict]:
+        items = self._read()
+        if tenant_id:
+            items = [e for e in items if e.get("tenant_id") == tenant_id]
+        items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return items[skip:skip + limit]
+
+    def count(self, tenant_id: str = None) -> int:
+        items = self._read()
+        if tenant_id:
+            items = [e for e in items if e.get("tenant_id") == tenant_id]
+        return len(items)

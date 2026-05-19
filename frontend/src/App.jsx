@@ -8,6 +8,8 @@ import TemplateEditPage from './pages/TemplateEditPage'
 import NewSubmissionPage from './pages/NewSubmissionPage'
 import SubmissionsPage from './pages/SubmissionsPage'
 import SubmissionDetailPage from './pages/SubmissionDetailPage'
+import AnswersetsPage from './pages/AnswersetsPage'
+import AnswersetDetailPage from './pages/AnswersetDetailPage'
 import UsersPage from './pages/UsersPage'
 import RolesPage from './pages/RolesPage'
 import WorkgroupsPage from './pages/WorkgroupsPage'
@@ -35,6 +37,8 @@ export default function App() {
           <Route path="submissions/new" element={<NewSubmissionPage />} />
           <Route path="submissions" element={<SubmissionsPage />} />
           <Route path="submissions/:id" element={<SubmissionDetailPage />} />
+          <Route path="answersets" element={<AnswersetsPage />} />
+          <Route path="answersets/:id" element={<AnswersetDetailPage />} />
           <Route path="users" element={<PrivateRoute roles={['admin']}><UsersPage /></PrivateRoute>} />
           <Route path="roles" element={<PrivateRoute roles={['admin']}><RolesPage /></PrivateRoute>} />
           <Route path="workgroups" element={<PrivateRoute roles={['admin']}><WorkgroupsPage /></PrivateRoute>} />

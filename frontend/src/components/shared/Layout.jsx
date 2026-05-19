@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
-  LayoutDashboard, FileText, FilePlus, ClipboardList,
+  LayoutDashboard, FileText, FilePlus, ClipboardList, FolderOpen,
   LogOut, ChevronRight, User, Users, Shield, KeyRound, Network
 } from 'lucide-react'
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/templates',    label: 'Templates',   icon: FileText,        roles: ['admin'] },
   { to: '/submissions/new', label: 'New Form', icon: FilePlus,        roles: ['admin','staff'] },
   { to: '/submissions',  label: 'Submissions', icon: ClipboardList,   roles: ['admin','staff','approver'] },
+  { to: '/answersets',   label: 'Answersets',  icon: FolderOpen,      roles: ['admin','staff','approver'] },
   { to: '/users',         label: 'Users',       icon: Users,           roles: ['admin'] },
   { to: '/roles',         label: 'Roles',       icon: Shield,          roles: ['admin'] },
   { to: '/workgroups',    label: 'Workgroups',  icon: Network,         roles: ['admin'] },
