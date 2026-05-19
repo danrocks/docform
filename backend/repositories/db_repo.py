@@ -6,6 +6,8 @@ from sqlalchemy.orm import sessionmaker
 
 from config import settings
 from models import (
+    AnswersetMetadata,
+    AuditLog,
     Base,
     Role,
     Tenant,
@@ -17,6 +19,8 @@ from models import (
     Workitem,
 )
 from repositories.base import (
+    AnswersetMetadataRepository,
+    AuditLogRepository,
     RoleRepository,
     TemplateSettingsRepository,
     TenantRepository,
@@ -447,6 +451,154 @@ class DbWorkitemRepository(WorkitemRepository):
             if exclude_id:
                 q = q.filter(Workitem.id != exclude_id)
             return q.first() is not None
+
+
+class DbAnswersetMetadataRepository(AnswersetMetadataRepository):
+    def get_all(self, tenant_id: str = None) -> list[dict]:
+        with get_session() as session:
+            q = session.query(AnswersetMetadata)
+            if tenant_id is not None:
+                q = q.filter(AnswersetMetadata.tenant_id == tenant_id)
+            return [m.to_dict() for m in q.order_by(AnswersetMetadata.submitted_at.desc()).all()]
+
+    def get_by_id(self, answerset_id: str) -> Optional[dict]:
+        with get_session() as session:
+            meta = session.get(AnswersetMetadata, answerset_id)
+            return meta.to_dict() if meta else None
+
+    def create(self, metadata: dict) -> dict:
+        import json
+        row_data = dict(metadata)
+        if "shared_with" in row_data and isinstance(row_data["shared_with"], list):
+            row_data["shared_with"] = json.dumps(row_data["shared_with"])
+        if "details" in row_data and isinstance(row_data["details"], dict):
+            row_data.pop("details", None)
+        # Map interviewVersion key to column name
+        if "interviewVersion" in row_data:
+            row_data["interview_version"] = row_data.pop("interviewVersion")
+        with get_session() as session:
+            db_meta = AnswersetMetadata(**row_data)
+            session.add(db_meta)
+            session.commit()
+            session.refresh(db_meta)
+            return db_meta.to_dict()
+
+    def update(self, answerset_id: str, data: dict) -> Optional[dict]:
+        import json
+        with get_session() as session:
+            meta = session.get(AnswersetMetadata, answerset_id)
+            if not meta:
+                return None
+            update_data = dict(data)
+            if "shared_with" in update_data and isinstance(update_data["shared_with"], list):
+                update_data["shared_with"] = json.dumps(update_data["shared_with"])
+            if "interviewVersion" in update_data:
+                update_data["interview_version"] = update_data.pop("interviewVersion")
+            for key, value in update_data.items():
+                if hasattr(meta, key):
+                    setattr(meta, key, value)
+            session.commit()
+            session.refresh(meta)
+            return meta.to_dict()
+
+    def delete(self, answerset_id: str) -> bool:
+        with get_session() as session:
+            meta = session.get(AnswersetMetadata, answerset_id)
+            if not meta:
+                return False
+            session.delete(meta)
+            session.commit()
+            return True
+
+    def count(self, tenant_id: str = None, user_id: str = None, workgroup_ids: list = None, template_id: str = None) -> int:
+        with get_session() as session:
+            q = session.query(AnswersetMetadata)
+            q = self._apply_filters(q, tenant_id, user_id, workgroup_ids, template_id)
+            return q.count()
+
+    def get_paginated(
+        self, skip: int = 0, limit: int = 20, tenant_id: str = None,
+        user_id: str = None, workgroup_ids: list = None,
+        template_id: str = None,
+    ) -> list[dict]:
+        with get_session() as session:
+            q = session.query(AnswersetMetadata)
+            q = self._apply_filters(q, tenant_id, user_id, workgroup_ids, template_id)
+            rows = q.order_by(AnswersetMetadata.submitted_at.desc()).offset(skip).limit(limit).all()
+            return [m.to_dict() for m in rows]
+
+    def get_by_workgroup(self, workgroup_id: str) -> list[dict]:
+        with get_session() as session:
+            rows = (
+                session.query(AnswersetMetadata)
+                .filter(AnswersetMetadata.workgroup_id == workgroup_id)
+                .order_by(AnswersetMetadata.submitted_at.desc())
+                .all()
+            )
+            return [m.to_dict() for m in rows]
+
+    def get_shared_with_user(self, user_id: str) -> list[dict]:
+        with get_session() as session:
+            # Use LIKE for JSON array search since shared_with is stored as JSON text
+            rows = (
+                session.query(AnswersetMetadata)
+                .filter(AnswersetMetadata.shared_with.like(f'%"{user_id}"%'))
+                .all()
+            )
+            return [m.to_dict() for m in rows]
+
+    def _apply_filters(self, q, tenant_id, user_id, workgroup_ids, template_id):
+        from sqlalchemy import or_
+        if tenant_id is not None:
+            q = q.filter(AnswersetMetadata.tenant_id == tenant_id)
+        if template_id is not None:
+            q = q.filter(AnswersetMetadata.template_id == template_id)
+        if user_id is not None:
+            conditions = [AnswersetMetadata.submitted_by == user_id]
+            conditions.append(AnswersetMetadata.shared_with.like(f'%"{user_id}"%'))
+            if workgroup_ids:
+                conditions.append(AnswersetMetadata.workgroup_id.in_(workgroup_ids))
+            q = q.filter(or_(*conditions))
+        return q
+
+
+class DbAuditLogRepository(AuditLogRepository):
+    def create(self, entry: dict) -> dict:
+        import json
+        row_data = dict(entry)
+        if "details" in row_data and isinstance(row_data["details"], dict):
+            row_data["details"] = json.dumps(row_data["details"])
+        with get_session() as session:
+            db_entry = AuditLog(**row_data)
+            session.add(db_entry)
+            session.commit()
+            session.refresh(db_entry)
+            return db_entry.to_dict()
+
+    def get_by_answerset(self, answerset_id: str) -> list[dict]:
+        with get_session() as session:
+            rows = (
+                session.query(AuditLog)
+                .filter(AuditLog.answerset_id == answerset_id)
+                .order_by(AuditLog.timestamp.desc())
+                .all()
+            )
+            return [r.to_dict() for r in rows]
+
+    def get_all(self, tenant_id: str = None, skip: int = 0, limit: int = 50) -> list[dict]:
+        with get_session() as session:
+            q = session.query(AuditLog)
+            if tenant_id is not None:
+                q = q.filter(AuditLog.tenant_id == tenant_id)
+            rows = q.order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
+            return [r.to_dict() for r in rows]
+
+    def count(self, tenant_id: str = None) -> int:
+        with get_session() as session:
+            q = session.query(AuditLog)
+            if tenant_id is not None:
+                q = q.filter(AuditLog.tenant_id == tenant_id)
+            return q.count()
 
 
 def create_tables() -> None:
