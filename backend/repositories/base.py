@@ -163,3 +163,50 @@ class TenantRepository(ABC):
 
     @abstractmethod
     def count(self) -> int: ...
+
+
+class AnswersetMetadataRepository(ABC):
+    @abstractmethod
+    def get_all(self, tenant_id: str = None) -> list[dict]: ...
+
+    @abstractmethod
+    def get_by_id(self, answerset_id: str) -> Optional[dict]: ...
+
+    @abstractmethod
+    def create(self, metadata: dict) -> dict: ...
+
+    @abstractmethod
+    def update(self, answerset_id: str, data: dict) -> Optional[dict]: ...
+
+    @abstractmethod
+    def delete(self, answerset_id: str) -> bool: ...
+
+    @abstractmethod
+    def count(self, tenant_id: str = None, user_id: str = None, workgroup_ids: list = None, template_id: str = None) -> int: ...
+
+    @abstractmethod
+    def get_paginated(
+        self, skip: int = 0, limit: int = 20, tenant_id: str = None,
+        user_id: str = None, workgroup_ids: list = None,
+        template_id: str = None,
+    ) -> list[dict]: ...
+
+    @abstractmethod
+    def get_by_workgroup(self, workgroup_id: str) -> list[dict]: ...
+
+    @abstractmethod
+    def get_shared_with_user(self, user_id: str) -> list[dict]: ...
+
+
+class AuditLogRepository(ABC):
+    @abstractmethod
+    def create(self, entry: dict) -> dict: ...
+
+    @abstractmethod
+    def get_by_answerset(self, answerset_id: str) -> list[dict]: ...
+
+    @abstractmethod
+    def get_all(self, tenant_id: str = None, skip: int = 0, limit: int = 50) -> list[dict]: ...
+
+    @abstractmethod
+    def count(self, tenant_id: str = None) -> int: ...

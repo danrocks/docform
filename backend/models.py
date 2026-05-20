@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, String, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, String, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -166,4 +166,81 @@ class WorkgroupUser(Base):
         return {
             "workgroup_id": self.workgroup_id,
             "user_id": self.user_id,
+        }
+
+
+class AnswersetMetadata(Base):
+    __tablename__ = "answerset_metadata"
+
+    id = Column(String, primary_key=True)
+    template_id = Column(String, nullable=False, index=True)
+    template_name = Column(String, nullable=False, default="")
+    interview_version = Column(String, nullable=True)
+    context = Column(Text, nullable=False, default="")
+    workgroup_id = Column(String, ForeignKey("workgroups.id", ondelete="SET NULL"), nullable=True, index=True)
+    submitted_by = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    submitted_by_name = Column(String, nullable=False, default="")
+    submitted_at = Column(String, nullable=False)
+    docx_path = Column(String, nullable=True)
+    pdf_path = Column(String, nullable=True)
+    shared_with = Column(Text, nullable=False, default="[]")  # JSON array of user IDs
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=True, index=True)
+    version = Column(Integer, nullable=False, default=1)
+    status = Column(String, nullable=False, default="pending")
+
+    def to_dict(self) -> dict:
+        import json
+        shared = self.shared_with or "[]"
+        try:
+            shared_list = json.loads(shared)
+        except (json.JSONDecodeError, TypeError):
+            shared_list = []
+        return {
+            "id": self.id,
+            "template_id": self.template_id,
+            "template_name": self.template_name,
+            "interviewVersion": self.interview_version,
+            "context": self.context,
+            "workgroup_id": self.workgroup_id,
+            "submitted_by": self.submitted_by,
+            "submitted_by_name": self.submitted_by_name,
+            "submitted_at": self.submitted_at,
+            "docx_path": self.docx_path,
+            "pdf_path": self.pdf_path,
+            "shared_with": shared_list,
+            "tenant_id": self.tenant_id,
+            "version": self.version,
+            "status": self.status,
+        }
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id = Column(String, primary_key=True)
+    answerset_id = Column(String, nullable=False, index=True)
+    operation = Column(String, nullable=False)
+    user_id = Column(String, nullable=False)
+    user_name = Column(String, nullable=False, default="")
+    tenant_id = Column(String, nullable=True, index=True)
+    ip_address = Column(String, nullable=False, default="")
+    timestamp = Column(String, nullable=False)
+    details = Column(Text, nullable=False, default="{}")  # JSON object
+
+    def to_dict(self) -> dict:
+        import json
+        try:
+            details_dict = json.loads(self.details or "{}")
+        except (json.JSONDecodeError, TypeError):
+            details_dict = {}
+        return {
+            "id": self.id,
+            "answerset_id": self.answerset_id,
+            "operation": self.operation,
+            "user_id": self.user_id,
+            "user_name": self.user_name,
+            "tenant_id": self.tenant_id,
+            "ip_address": self.ip_address,
+            "timestamp": self.timestamp,
+            "details": details_dict,
         }

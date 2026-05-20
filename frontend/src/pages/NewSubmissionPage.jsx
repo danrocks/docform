@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api'
 import toast from 'react-hot-toast'
 import { FileText, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react'
@@ -497,6 +497,10 @@ function Success({ submission, onNew }) {
 }
 
 export default function NewSubmissionPage() {
+  const [searchParams] = useSearchParams()
+  const preselectedTemplateId = searchParams.get('template')
+  const preselectedWorkgroup = searchParams.get('workgroup')
+
   const [templates, setTemplates] = useState([])
   const [step, setStep] = useState(1)
   const [selected, setSelected] = useState(null)
@@ -504,11 +508,64 @@ export default function NewSubmissionPage() {
   const [context, setContext] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submission, setSubmission] = useState(null)
+  const [autoSaveStatus, setAutoSaveStatus] = useState(null) // 'saving' | 'saved' | 'error'
+  const autoSaveIdRef = useRef(null)
+  const autoSaveVersionRef = useRef(1)
+  const savingRef = useRef(false)
 
   useEffect(() => {
-    api.get('/templates/').then(r => setTemplates(r.data.filter(t => t.active)))
-      .catch(() => toast.error('Failed to load templates'))
-  }, [])
+    api.get('/templates/').then(r => {
+      const active = r.data.filter(t => t.active)
+      setTemplates(active)
+      // Auto-select template if provided via URL params
+      if (preselectedTemplateId && !selected) {
+        const match = active.find(t => t.id === preselectedTemplateId)
+        if (match) {
+          setSelected(match)
+          setFormData({})
+          setStep(2)
+        }
+      }
+    }).catch(() => toast.error('Failed to load templates'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save: debounced save to answersets API when form data changes
+  useEffect(() => {
+    if (!selected || step !== 2) return
+    if (Object.keys(formData).length === 0) return
+
+    const timer = setTimeout(async () => {
+      if (savingRef.current) return
+      savingRef.current = true
+      setAutoSaveStatus('saving')
+      try {
+        if (autoSaveIdRef.current) {
+          const { data } = await api.put(`/answersets/${autoSaveIdRef.current}`, {
+            data: formData,
+            context,
+            version: autoSaveVersionRef.current,
+          })
+          autoSaveVersionRef.current = data.metadata?.version || autoSaveVersionRef.current + 1
+          setAutoSaveStatus('saved')
+        } else {
+          const { data } = await api.post('/answersets/', {
+            template_id: selected.id,
+            data: formData,
+            context,
+          })
+          autoSaveIdRef.current = data.id
+          autoSaveVersionRef.current = data.metadata?.version || 1
+          setAutoSaveStatus('saved')
+        }
+      } catch {
+        setAutoSaveStatus('error')
+      } finally {
+        savingRef.current = false
+      }
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [formData, context, selected, step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stable callback so the expression-recompute effect inside FillForm only
   // re-runs when `data` or `template` actually change, not on every render of
@@ -518,16 +575,18 @@ export default function NewSubmissionPage() {
     [],
   )
 
-  const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null) }
+  const reset = () => { setStep(1); setSelected(null); setFormData({}); setContext(''); setSubmission(null); autoSaveIdRef.current = null; autoSaveVersionRef.current = 1; setAutoSaveStatus(null) }
 
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
-      const { data } = await api.post('/submissions/', {
+      const payload = {
         template_id: selected.id,
         data: formData,
         context,
-      })
+      }
+      if (preselectedWorkgroup) payload.workgroup_id = preselectedWorkgroup
+      const { data } = await api.post('/submissions/', payload)
       setSubmission(data)
       setStep(3)
     } catch (err) {
@@ -566,6 +625,13 @@ export default function NewSubmissionPage() {
       </div>
 
       <div className="card p-6 max-w-2xl">
+        {step === 2 && autoSaveStatus && (
+          <div className="mb-3 flex items-center gap-2 text-xs">
+            {autoSaveStatus === 'saving' && <span className="text-brand-400">Auto-saving…</span>}
+            {autoSaveStatus === 'saved' && <span className="text-accent-600">Auto-saved</span>}
+            {autoSaveStatus === 'error' && <span className="text-red-500">Auto-save failed</span>}
+          </div>
+        )}
         {step === 1 && (
           templates.length === 0
             ? <div className="text-center py-8 text-brand-400 text-sm">No active templates available. Ask an admin to create one.</div>
