@@ -31,9 +31,7 @@ export default function Layout() {
         {/* Logo */}
         <div className="px-5 py-5 border-b border-brand-100">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
-              <FileText size={16} className="text-white" />
-            </div>
+            <img src="/favicon-96x96.png" alt="DocForm" className="w-8 h-8" />
             <span className="font-bold text-brand-900 text-lg">DocForm</span>
           </div>
         </div>
