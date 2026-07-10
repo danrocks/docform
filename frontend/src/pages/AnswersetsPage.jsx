@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
-import { Search, Filter, ChevronLeft, ChevronRight, Copy, Trash2 } from 'lucide-react'
+import { Search, Filter, ChevronLeft, ChevronRight, Copy, Trash2, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const STATUS_CLASSES = {
@@ -20,6 +20,8 @@ export default function AnswersetsPage() {
   const [total, setTotal] = useState(0)
   const [skip, setSkip] = useState(0)
   const [limit] = useState(20)
+  const [selected, setSelected] = useState(() => new Set())
+  const [generating, setGenerating] = useState(false)
 
   const fetchAnswersets = useCallback(() => {
     setLoading(true)
@@ -39,6 +41,33 @@ export default function AnswersetsPage() {
   }, [skip, limit])
 
   useEffect(() => { fetchAnswersets() }, [fetchAnswersets])
+  useEffect(() => { setSelected(new Set()) }, [skip])
+
+  const toggleSelected = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkGenerate = async () => {
+    const ids = [...selected]
+    if (ids.length === 0) return
+    setGenerating(true)
+    try {
+      const r = await api.post('/answersets/bulk-generate', { ids })
+      const { succeeded, failed } = r.data
+      if (failed) toast.error(`Regenerated ${succeeded}, ${failed} failed`)
+      else toast.success(`Regenerated ${succeeded} document${succeeded === 1 ? '' : 's'}`)
+      setSelected(new Set())
+      fetchAnswersets()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Bulk generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   const handleClone = async (e, id) => {
     e.preventDefault()
@@ -76,6 +105,11 @@ export default function AnswersetsPage() {
   const totalPages = Math.ceil(total / limit)
   const currentPage = Math.floor(skip / limit) + 1
 
+  const allSelected = filtered.length > 0 && filtered.every(s => selected.has(s.id))
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(filtered.map(s => s.id)))
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -103,6 +137,12 @@ export default function AnswersetsPage() {
             <option value="error">Error</option>
           </select>
         </div>
+        {selected.size > 0 && (
+          <button className="btn btn-sm btn-primary ml-auto" disabled={generating} onClick={handleBulkGenerate}>
+            <RefreshCw size={14} className={generating ? 'animate-spin' : ''} />
+            {generating ? 'Regenerating…' : `Regenerate ${selected.size} selected`}
+          </button>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -114,6 +154,9 @@ export default function AnswersetsPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-brand-100 bg-brand-50">
               <tr>
+                <th className="px-5 py-3 w-8">
+                  <input type="checkbox" aria-label="Select all" checked={allSelected} onChange={toggleSelectAll} />
+                </th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Template</th>
                 {user.role !== 'staff' && <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Submitted by</th>}
                 <th className="text-left px-5 py-3 text-xs font-medium text-brand-500 uppercase tracking-wider">Date</th>
@@ -124,6 +167,10 @@ export default function AnswersetsPage() {
             <tbody className="divide-y divide-brand-50">
               {filtered.map(s => (
                 <tr key={s.id} className="hover:bg-brand-50 transition-colors">
+                  <td className="px-5 py-3">
+                    <input type="checkbox" aria-label={`Select ${s.template_name}`}
+                      checked={selected.has(s.id)} onChange={() => toggleSelected(s.id)} />
+                  </td>
                   <td className="px-5 py-3 font-medium text-brand-900">{s.template_name}</td>
                   {user.role !== 'staff' && <td className="px-5 py-3 text-brand-600">{s.submitted_by_name}</td>}
                   <td className="px-5 py-3 text-brand-500 text-xs">
