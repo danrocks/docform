@@ -1,0 +1,1 @@
+The Answersets page keeps every generated document in one place. Search, filter by status, or clone and delete rows. To rebuild many at once, tick select all and click regenerate selected. In one click, every document is refreshed.

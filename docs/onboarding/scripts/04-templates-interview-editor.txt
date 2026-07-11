@@ -1,0 +1,1 @@
+Templates define your documents. Open the interview editor to configure the fields. Each question has an I D that maps to a placeholder in your Word file, plus a label and type. Add any field type you need, then save.
