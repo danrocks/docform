@@ -1,0 +1,1 @@
+DocForm's global search finds anything across your workspace. Open Search from the sidebar and type any term. Results are grouped into templates, submissions, and answersets, each with a live count. Click any result to jump straight to it.
