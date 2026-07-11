@@ -64,9 +64,28 @@ Each subdomain is a completely isolated environment. Tokens from one subdomain a
   
 ## Roadmap  
   
-Planned architectural changes — not yet implemented:  
+Planned changes and known gaps — not yet implemented. Roughly ordered by how much they unblock other work.  
   
-- **Database persistence**: Partially complete — user/tenant storage has been migrated to PostgreSQL with a repository abstraction (`backend/repositories/`). Templates and submissions still use flat-file JSON in `data/`.  
+### Architecture / persistence  
+  
+- **Finish database persistence**: Partially complete — user/tenant/role/workgroup/workitem/answerset-metadata/audit storage is in PostgreSQL via the repository abstraction (`backend/repositories/`), but **templates and submissions/answersets themselves still use flat-file JSON** in `data/` (and binaries in `uploads/`). Completing this unblocks cross-entity search and template versioning.  
+- **Object storage for uploads**: `uploads/` (uploaded `.docx` and generated docs) is written to local disk, so the app can't scale horizontally. Move to S3/GCS/R2.  
+- **Production-grade shared state**: In-memory stores don't survive restarts or multiple processes — `backend/rate_limit.py` (login rate limiting) and `backend/auth_utils.py` (revoked-JWT set) both need a shared store such as Redis.  
+- **Service layer**: Business logic, file I/O, and document rendering currently live inside the route handlers (e.g. `routes/answersets.py`, `routes/templates.py` are large). Extracting a `backend/services/` layer would make logic unit-testable independently of the HTTP layer.  
+  
+### Features  
+  
+- **Notifications / email**: No email/SMTP layer exists. Needed for approval-workflow notifications, password resets, and emailing generated documents to recipients.  
+- **E-signature**: Capture signatures on completed instances (or integrate DocuSign / Dropbox Sign).  
+- **Cross-entity search**: Search is client-side filtering per page; there is no backend search across templates, submissions, and answersets.  
+- **Template versioning**: Editing a template's fields/placeholders can silently break existing answersets; introduce immutable published versions.  
+- **Bulk operations / document assembly**: Generate documents for many answersets at once, or combine multiple templates into one packet.  
+- **Public / tokenized interview links**: Let external (non-logged-in) users complete an interview via a shared link.  
+  
+### Quality  
+  
+- **Broaden audit logging**: Audit logging currently covers answersets only (`audit_log`); extend it to auth, users, roles, templates, and tenant changes for a full compliance trail.  
+- **Test coverage gaps**: The submissions route and template upload / placeholder detection / AI generation (`providers/`) remain largely untested; the frontend has only one test file (`expressionEval.test.js`) with no component/page/e2e tests. There is no CI workflow or coverage gate. (Answersets and document-generation coverage was added in PR #20.)  
   
 ## Conventions  
   
