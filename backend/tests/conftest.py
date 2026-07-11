@@ -37,6 +37,8 @@ def tmp_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(jr, "WORKGROUP_TEMPLATES_FILE", workgroup_templates_file)
     monkeypatch.setattr(jr, "WORKGROUP_USERS_FILE", workgroup_users_file)
     monkeypatch.setattr(jr, "WORKITEMS_FILE", workitems_file)
+    monkeypatch.setattr(jr, "ANSWERSET_METADATA_FILE", tmp_path / "answerset_metadata.json")
+    monkeypatch.setattr(jr, "AUDIT_LOG_FILE", tmp_path / "audit_log.json")
 
     import rate_limit
     rate_limit._attempts.clear()
@@ -190,3 +192,73 @@ def tenant_headers(slug, token):
 
 def admin_headers(token):
     return {"Host": "admin.localhost:3000", "Authorization": f"Bearer {token}"}
+
+
+# ---------------------------------------------------------------------------
+# Answerset / document helpers (shared by answerset, search and bulk tests)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def answersets_env(tmp_path, monkeypatch):
+    """Redirect answerset file storage (templates/submissions/generated docs)
+    to a temp directory by patching ``BACKEND_ROOT`` in ``file_utils`` and the
+    route modules that imported it by name. Returns the temp root.
+    """
+    root = tmp_path / "backend_root"
+    root.mkdir()
+
+    import file_utils
+    import routes.answersets as answersets_route
+    monkeypatch.setattr(file_utils, "BACKEND_ROOT", root)
+    monkeypatch.setattr(answersets_route, "BACKEND_ROOT", root)
+
+    return root
+
+
+DEFAULT_COMPONENTS = [
+    {"type": "string", "id": "customer_name", "label": "Customer name", "required": True},
+    {"type": "string", "id": "work_description", "label": "Work done", "required": False, "multiline": True},
+    {"type": "number", "id": "price", "label": "Price", "required": True, "min": 0},
+]
+
+
+def seed_template(root, tenant_id, template_id="tpl-1", name="Test Template", components=None):
+    """Create a template (meta.json, interview.json, template.docx) on disk."""
+    from docx import Document
+
+    components = components if components is not None else DEFAULT_COMPONENTS
+    tpl_dir = root / "data" / "templates" / tenant_id / template_id
+    tpl_dir.mkdir(parents=True, exist_ok=True)
+
+    (tpl_dir / "meta.json").write_text(json.dumps({
+        "schemaVersion": 1,
+        "id": template_id,
+        "name": name,
+        "active": True,
+    }))
+    (tpl_dir / "interview.json").write_text(json.dumps({
+        "schemaVersion": 1,
+        "id": f"{template_id}_interview",
+        "version": 3,
+        "components": components,
+    }))
+
+    doc = Document()
+    doc.add_paragraph("Customer: {{customer_name}}")
+    doc.add_paragraph("Work: {{work_description}}")
+    doc.add_paragraph("Price: {{price}}")
+    doc.save(str(tpl_dir / "template.docx"))
+
+    return template_id
+
+
+def valid_data(**overrides):
+    data = {"customer_name": "Acme Ltd", "work_description": "Consulting", "price": 100}
+    data.update(overrides)
+    return data
+
+
+def create_answerset(client, token, template_id="tpl-1", data=None, slug="alpha", **body):
+    payload = {"template_id": template_id, "data": data if data is not None else valid_data(), **body}
+    return client.post("/api/answersets/", json=payload, headers=tenant_headers(slug, token))

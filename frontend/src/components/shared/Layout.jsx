@@ -2,11 +2,12 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, FileText, FilePlus, ClipboardList, FolderOpen,
-  LogOut, ChevronRight, User, Users, Shield, KeyRound, Network
+  LogOut, ChevronRight, User, Users, Shield, KeyRound, Network, Search
 } from 'lucide-react'
 
 const navItems = [
   { to: '/',             label: 'Dashboard',   icon: LayoutDashboard, roles: ['admin','staff','approver'] },
+  { to: '/search',       label: 'Search',      icon: Search,          roles: ['admin','staff','approver'] },
   { to: '/templates',    label: 'Templates',   icon: FileText,        roles: ['admin'] },
   { to: '/submissions/new', label: 'New Form', icon: FilePlus,        roles: ['admin','staff'] },
   { to: '/submissions',  label: 'Submissions', icon: ClipboardList,   roles: ['admin','staff','approver'] },

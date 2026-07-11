@@ -12,7 +12,7 @@ from config import settings
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", settings.OPENAI_API_KEY)
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
-from routes import auth, templates, submissions, users, roles, tenants, workgroups, template_settings, workitems, answersets
+from routes import auth, templates, submissions, users, roles, tenants, workgroups, template_settings, workitems, answersets, search
 from repositories.factory import get_role_repository, get_user_repository, get_tenant_repository
 
 BACKEND_ROOT = Path(__file__).resolve().parent
@@ -94,6 +94,7 @@ app.include_router(workgroups.router,  prefix="/api/workgroups",  tags=["workgro
 app.include_router(template_settings.router, prefix="/api/template-settings", tags=["template-settings"])
 app.include_router(workitems.router, prefix="/api/workgroups", tags=["workitems"])
 app.include_router(answersets.router, prefix="/api/answersets", tags=["answersets"])
+app.include_router(search.router, prefix="/api/search", tags=["search"])
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

@@ -9,6 +9,7 @@ import NewSubmissionPage from './pages/NewSubmissionPage'
 import SubmissionsPage from './pages/SubmissionsPage'
 import SubmissionDetailPage from './pages/SubmissionDetailPage'
 import AnswersetsPage from './pages/AnswersetsPage'
+import SearchPage from './pages/SearchPage'
 import AnswersetDetailPage from './pages/AnswersetDetailPage'
 import UsersPage from './pages/UsersPage'
 import RolesPage from './pages/RolesPage'
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="submissions/new" element={<NewSubmissionPage />} />
           <Route path="submissions" element={<SubmissionsPage />} />
           <Route path="submissions/:id" element={<SubmissionDetailPage />} />
+          <Route path="search" element={<SearchPage />} />
           <Route path="answersets" element={<AnswersetsPage />} />
           <Route path="answersets/:id" element={<AnswersetDetailPage />} />
           <Route path="users" element={<PrivateRoute roles={['admin']}><UsersPage /></PrivateRoute>} />

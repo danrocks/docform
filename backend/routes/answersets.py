@@ -61,6 +61,10 @@ class AnswersetShare(BaseModel):
     shared_with: List[str]
 
 
+class BulkGenerate(BaseModel):
+    ids: List[str]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -592,6 +596,69 @@ def generate_answerset_documents(
     _audit_log(request, answerset_id, "generate", current_user)
 
     return answerset
+
+
+@router.post("/bulk-generate")
+def bulk_generate_documents(
+    body: BulkGenerate,
+    request: Request,
+    current_user: dict = Depends(verify_tenant_match),
+):
+    """(Re)generate documents for several answersets in one request.
+
+    Each id is processed independently: access is checked per answerset and a
+    per-id status is returned so a failure on one doesn't abort the batch.
+    """
+    meta_repo = get_answerset_metadata_repository()
+    tenant_id = current_user.get("tenant_id")
+    results: list[dict] = []
+
+    for answerset_id in body.ids:
+        entry = {"id": answerset_id}
+        meta = meta_repo.get_by_id(answerset_id)
+        if not meta or (tenant_id is not None and meta.get("tenant_id") != tenant_id):
+            results.append({**entry, "status": "error", "error": "not_found"})
+            continue
+        try:
+            _check_answerset_access(meta, current_user)
+        except HTTPException:
+            results.append({**entry, "status": "error", "error": "forbidden"})
+            continue
+
+        try:
+            path = _find_answerset_file(request, answerset_id, workgroup_id=meta.get("workgroup_id"))
+            answerset = json.loads(path.read_text())
+
+            template_dir = _get_templates_dir(request) / meta["template_id"]
+            tpl_path = template_dir / TEMPLATE_META_FILENAME
+            if not tpl_path.exists():
+                results.append({**entry, "status": "error", "error": "template_not_found"})
+                continue
+            tpl_meta = json.loads(tpl_path.read_text())
+
+            generated_dir = _get_generated_dir(request, workgroup_id=meta.get("workgroup_id"))
+            docx_out, pdf_out = _generate_documents(tpl_meta, answerset, template_dir, generated_dir)
+            answerset["docx_path"] = str(docx_out.relative_to(BACKEND_ROOT))
+            answerset["pdf_path"] = str(pdf_out.relative_to(BACKEND_ROOT)) if pdf_out else None
+            answerset["status"] = "generated"
+            atomic_write_json(path, answerset)
+            meta_repo.update(answerset_id, {
+                "docx_path": answerset.get("docx_path"),
+                "pdf_path": answerset.get("pdf_path"),
+                "status": answerset["status"],
+            })
+            _audit_log(request, answerset_id, "generate", current_user, {"bulk": True})
+            results.append({
+                **entry,
+                "status": "generated",
+                "docx_path": answerset.get("docx_path"),
+                "pdf_path": answerset.get("pdf_path"),
+            })
+        except Exception as e:
+            results.append({**entry, "status": "error", "error": str(e)})
+
+    succeeded = sum(1 for r in results if r["status"] == "generated")
+    return {"results": results, "succeeded": succeeded, "failed": len(results) - succeeded}
 
 
 @router.get("/{answerset_id}/download/{format}")
